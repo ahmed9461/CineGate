@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import os
 from types import SimpleNamespace
 
@@ -262,3 +263,73 @@ async def test_slash_command_is_not_treated_as_movie_search(database: Database) 
             )
         )
     assert state is None
+
+
+
+@pytest.mark.asyncio
+async def test_rapid_duplicate_movie_callback_copies_poster_once(
+    database: Database,
+) -> None:
+    await seed_movie(database)
+    search = MovieSearchService(database)
+    sessions = SearchSessionService(database)
+    router = build_user_router(
+        database=database,
+        search=search,
+        sessions=sessions,
+    )
+    bot = FakeBot()
+
+    search_handler = handler(router, "message", "direct_movie_search")
+    incoming = FakeIncomingMessage("Interstellar")
+    await search_handler(incoming, bot=bot)
+
+    button = incoming.answers[0].reply_markup.inline_keyboard[0][0]
+    assert button.callback_data is not None
+    callback_data = MovieSelectCallback.unpack(button.callback_data)
+
+    select_handler = handler(router, "callback_query", "select_movie")
+    first_callback = FakeCallback()
+    second_callback = FakeCallback()
+
+    await asyncio.gather(
+        select_handler(
+            first_callback,
+            callback_data=callback_data,
+            bot=bot,
+        ),
+        select_handler(
+            second_callback,
+            callback_data=callback_data,
+            bot=bot,
+        ),
+    )
+
+    assert len(bot.copied) == 1
+
+
+@pytest.mark.asyncio
+async def test_no_result_message_can_be_changed_from_database(
+    database: Database,
+) -> None:
+    custom_text = "الفيلم غير موجود حاليًا."
+    async with database.session() as session, session.begin():
+        session.add(
+            MessageTemplate(
+                key="search_no_results",
+                body=custom_text,
+            )
+        )
+
+    router = build_user_router(
+        database=database,
+        search=MovieSearchService(database),
+        sessions=SearchSessionService(database),
+    )
+    bot = FakeBot()
+    search_handler = handler(router, "message", "direct_movie_search")
+
+    incoming = FakeIncomingMessage("NotAvailable")
+    await search_handler(incoming, bot=bot)
+
+    assert incoming.answers[0].text == custom_text
