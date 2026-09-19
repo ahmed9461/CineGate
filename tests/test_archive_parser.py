@@ -237,3 +237,14 @@ def test_bulleted_modern_field_labels_are_supported() -> None:
     assert len(groups) == 1
     assert groups[0].status is GroupStatus.INDEXED
     assert groups[0].display_title == "Bullet Style Movie"
+
+
+def test_out_of_order_messages_are_rejected_instead_of_sorted_in_memory() -> None:
+    parser = ArchiveParser()
+    with pytest.raises(ValueError, match="ordered by ascending message_id"):
+        parser.parse(
+            [
+                modern_poster(200, title="Later", year=2025),
+                video(199, "Later 2025 #720p"),
+            ]
+        )
