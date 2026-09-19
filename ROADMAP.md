@@ -54,23 +54,25 @@ This roadmap is directional. Every phase requires its own detailed plan file bef
 
 ## Phase 4 — Search experience
 
-- [ ] Direct text search
-- [ ] English normalization
-- [ ] Exact/prefix/word ranking
-- [ ] Typo-tolerant fuzzy ranking
-- [ ] Relevance thresholds
-- [ ] Result buttons
-- [ ] No-result template
+- [x] Direct text search
+- [x] English normalization
+- [x] Exact/prefix/word ranking
+- [x] Typo-tolerant fuzzy ranking
+- [x] Relevance thresholds
+- [x] Result buttons
+- [x] No-result template
 - [ ] Input/rate-limit protections
 - [ ] Search metrics/debugging
 
+**Search/movie-page implementation:** `plans/0005-search-and-movie-page.md`
+
 ## Phase 5 — Movie page & quality selection
 
-- [ ] Copy/send archive poster/info
-- [ ] Render only available qualities
-- [ ] Back/results navigation
-- [ ] Stale/deleted archive-reference handling
-- [ ] Centralized button rendering/styles
+- [x] Copy/send archive poster/info
+- [x] Render only available qualities
+- [x] Back/results navigation
+- [x] Stale/deleted archive-reference handling
+- [x] Centralized button rendering/styles
 
 ## Phase 6 — Rewarded advertisement flow
 
