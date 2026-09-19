@@ -1,7 +1,7 @@
 # CineGate Project Status
 
 **Last updated:** 2026-09-19  
-**Overall status:** 🟡 Planning / foundation  
+**Overall status:** 🟡 Planning / archive parser specification complete  
 **Code status:** No application code implemented yet.
 
 ## Completed
@@ -13,32 +13,49 @@
 - Initial roadmap recorded.
 - Progress/decision tracking structure created.
 - Secret/session files protected through `.gitignore`.
+- Real archive posting examples received from the owner.
+- Modern/current archive format documented.
+- Legacy/historical archive format documented.
+- Sequence-first parser/grouping strategy specified.
+- Title normalization and orphan/ambiguous handling specified.
+- `plans/0002-archive-format-and-parser.md` completed.
 
 ## Current checkpoint
 
-We have defined the product flow and archive strategy, but the archive parser must **not** be implemented yet because the owner has not yet supplied the real movie post structure.
+The archive format is no longer unknown.
+
+CineGate must support:
+
+1. the modern/current structured poster + quality-caption format
+2. the older legacy format with optional `#طلب_المتابعين` and title-label variants
+
+The core parser rule is:
+
+**sequence first → normalization/year/title evidence second → ambiguity safety checks**
+
+Exact title equality is not required.
+
+No production parser code has started yet.
 
 ## Next exact step
 
-1. Owner provides real examples/screenshots/text structure showing:
-   - poster/information post
-   - each quality post/file
-   - ordering/grouping between films
-   - any captions/labels used
-2. Create `plans/0002-archive-format-and-parser.md`.
-3. Document deterministic grouping/parsing rules.
-4. Validate edge cases with the owner-provided examples.
-5. Only after that, implement the archive indexer/parser.
+Before application code:
+
+1. Create the next plan for application foundation / parser implementation.
+2. Select the bot/backend stack and database.
+3. Define service boundaries and persistent schema.
+4. Convert Plan 0002 cases into executable parser fixtures/tests.
+5. Implement the parser only after that plan is written.
 
 ## Open decisions
 
-- [ ] Exact archive post/group structure
 - [ ] Rewarded-ad provider
 - [ ] Final backend/bot technology stack
 - [ ] Database choice
 - [ ] UserBot library for one-time initial import
 - [ ] Deployment target/topology
 - [ ] Exact Bot API/library versions
+- [ ] Real-time handling for archive post edits/deletes
 
 ## Known non-negotiable requirements
 
@@ -51,16 +68,21 @@ We have defined the product flow and archive strategy, but the archive parser mu
 - Runtime settings/messages editable in the owner bot.
 - Environment files reserved for secrets/bootstrap sensitive values.
 - Telegram formatting/rich presentation must be preserved intentionally.
+- Modern archive style is the primary ingestion format.
+- Legacy archive style must remain compatible for historical import.
+- Archive grouping is sequence-first, not exact-title-first.
+- A poster with zero valid qualities is not searchable.
+- Ambiguous attachment is safer than a wrong automatic association.
 - Every new work item starts with a plan file and ends with memory/status/progress updates.
 
 ## Active plan
 
-`plans/0001-project-foundation.md` — **Completed**
+`plans/0002-archive-format-and-parser.md` — **Completed**
 
 ## Blockers
 
-No implementation blocker other than intentionally waiting for the archive post format before designing the parser.
+No blocker. The next work item must receive its own plan before any implementation begins.
 
 ## Resume instruction
 
-If resuming after a gap, read `AGENTS.md` first, then this file and `PROJECT_MEMORY.md`. Do not infer missing state from memory or chat alone.
+If resuming after a gap, read `AGENTS.md`, `PROJECT_MEMORY.md`, this file, and `plans/0002-archive-format-and-parser.md` before starting new work.
