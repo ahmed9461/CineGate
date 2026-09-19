@@ -1,88 +1,104 @@
 # CineGate Project Status
 
-**Last updated:** 2026-09-19  
-**Overall status:** 🟡 Planning / archive parser specification complete  
-**Code status:** No application code implemented yet.
+**Last updated:** 2026-09-20  
+**Overall status:** 🟢 Application foundation + archive parser complete  
+**Code status:** Foundation code is implemented and CI-verified.
 
 ## Completed
 
-- Repository created as `CineGate`.
-- Persistent project-memory workflow established.
-- Mandatory plan-before-work rule established.
-- Core product requirements recorded.
-- Initial roadmap recorded.
-- Progress/decision tracking structure created.
-- Secret/session files protected through `.gitignore`.
-- Real archive posting examples received from the owner.
-- Modern/current archive format documented.
-- Legacy/historical archive format documented.
-- Sequence-first parser/grouping strategy specified.
-- Title normalization and orphan/ambiguous handling specified.
-- `plans/0002-archive-format-and-parser.md` completed.
+- Repository governance/memory system.
+- Real modern + legacy archive format specification.
+- Python 3.12 project foundation.
+- aiogram 3 dependency selected for Telegram.
+- FastAPI/Uvicorn HTTP foundation.
+- PostgreSQL + SQLAlchemy async + asyncpg persistence foundation.
+- Alembic initial schema and migration environment.
+- Local PostgreSQL Docker Compose.
+- Secrets-only environment settings layer.
+- `movies`, `movie_qualities`, `app_settings`, and `message_templates` models.
+- Sequence-first modern/legacy archive parser.
+- Title/year/quality normalization.
+- Orphan/ambiguous handling.
+- Duplicate quality deterministic handling.
+- Streaming O(n) ordered parser input.
+- FastAPI `/healthz`.
+- CI with Ruff, pytest, PostgreSQL migration round-trip, and compile checks.
+- Two explicit review passes: correctness + performance/complexity.
+- Plan 0003 completed.
+
+## Verification
+
+Latest completed foundation verification:
+
+- Ruff: passed
+- pytest: **31 passed**
+- Alembic/PostgreSQL 16: upgrade → downgrade → upgrade passed
+- Python compileall: passed
+
+Dependency deprecation warnings observed in the test runner came from installed FastAPI/Starlette test internals, not CineGate code.
 
 ## Current checkpoint
 
-The archive format is no longer unknown.
+The parser and application foundation are ready, but Telegram is not yet wired to:
 
-CineGate must support:
+- receive webhook updates
+- ingest Archive Channel posts
+- persist parsed movies/qualities in real time
+- send owner indexing notifications
 
-1. the modern/current structured poster + quality-caption format
-2. the older legacy format with optional `#طلب_المتابعين` and title-label variants
-
-The core parser rule is:
-
-**sequence first → normalization/year/title evidence second → ambiguity safety checks**
-
-Exact title equality is not required.
-
-No production parser code has started yet.
+No rewarded-ad integration or end-user movie search flow is implemented yet.
 
 ## Next exact step
 
-Before application code:
+Create `plans/0004-telegram-webhook-and-archive-indexer.md` **before implementation**.
 
-1. Create the next plan for application foundation / parser implementation.
-2. Select the bot/backend stack and database.
-3. Define service boundaries and persistent schema.
-4. Convert Plan 0002 cases into executable parser fixtures/tests.
-5. Implement the parser only after that plan is written.
+That plan should cover:
+
+1. aiogram dispatcher/bot lifecycle inside FastAPI.
+2. Telegram webhook secret validation.
+3. channel post conversion into parser/domain messages.
+4. durable real-time archive grouping/indexing.
+5. transaction-safe/idempotent movie + quality upserts.
+6. rapid/duplicate update handling.
+7. owner “تم حفظ منشورات جديدة” notification flow.
+8. startup/restart recovery.
+9. tests for duplicate, concurrent, and restart cases.
+10. archive edit/delete behavior decision where needed.
 
 ## Open decisions
 
-- [ ] Rewarded-ad provider
-- [ ] Final backend/bot technology stack
-- [ ] Database choice
-- [ ] UserBot library for one-time initial import
-- [ ] Deployment target/topology
-- [ ] Exact Bot API/library versions
-- [ ] Real-time handling for archive post edits/deletes
+- [ ] Rewarded-ad provider (integration intentionally postponed until the Mini App phase)
+- [ ] UserBot library for one-time historical import
+- [ ] Production hosting/deployment topology
+- [ ] Exact Telegram rich-message feature/version choices
+- [ ] Real-time archive edit/delete reconciliation behavior
 
 ## Known non-negotiable requirements
 
 - Archive Channel is the media source of truth.
-- No external movie lookup is required for posters/info/qualities.
+- No external movie lookup for posters/info/qualities.
 - English direct-text search with typo tolerance.
-- Reward verification before quality delivery.
-- Configurable temporary movie delivery with durable auto-deletion.
-- Poster message is not deleted by the file timer.
-- Runtime settings/messages editable in the owner bot.
-- Environment files reserved for secrets/bootstrap sensitive values.
+- Reward verification before delivery.
+- Temporary delivered movie auto-deletion must be durable.
+- Poster/info is not deleted by the movie timer.
+- Runtime settings/messages editable inside the owner bot.
+- Environment configuration stays limited to secrets/sensitive bootstrap values.
 - Telegram formatting/rich presentation must be preserved intentionally.
-- Modern archive style is the primary ingestion format.
-- Legacy archive style must remain compatible for historical import.
-- Archive grouping is sequence-first, not exact-title-first.
-- A poster with zero valid qualities is not searchable.
-- Ambiguous attachment is safer than a wrong automatic association.
-- Every new work item starts with a plan file and ends with memory/status/progress updates.
+- Modern + legacy archive formats remain supported.
+- Grouping is sequence-first, not exact-title-first.
+- Posters with zero accepted qualities are not searchable.
+- Ambiguous data is safer than a wrong automatic association.
+- Every new work item starts with a plan and ends with repository memory/status/progress updates.
+- Avoid unnecessary infrastructure and hot-path work.
 
 ## Active plan
 
-`plans/0002-archive-format-and-parser.md` — **Completed**
+`plans/0003-application-foundation-and-parser.md` — **Completed**
 
 ## Blockers
 
-No blocker. The next work item must receive its own plan before any implementation begins.
+None for the next development phase.
 
 ## Resume instruction
 
-If resuming after a gap, read `AGENTS.md`, `PROJECT_MEMORY.md`, this file, and `plans/0002-archive-format-and-parser.md` before starting new work.
+Read `AGENTS.md`, `PROJECT_MEMORY.md`, this file, `plans/0002-archive-format-and-parser.md`, and `plans/0003-application-foundation-and-parser.md` before starting Plan 0004.
