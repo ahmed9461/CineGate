@@ -26,8 +26,7 @@ class ArchiveIndexService:
         channel_id: int,
         message: ArchiveMessage,
     ) -> ArchiveIndexResult:
-        async with self._database.session() as session:
-            async with session.begin():
+        async with self._database.session() as session, session.begin():
                 configured_channel_id = await SettingsRepository(session).get_int(
                     "archive_channel_id"
                 )
