@@ -282,13 +282,71 @@ async def test_pg_trgm_extension_and_index_are_installed(database: Database) -> 
                 ")"
             )
         )
-        index_exists = await session.scalar(
+        canonical_index_exists = await session.scalar(
             text(
                 "SELECT to_regclass("
                 "'public.ix_movies_normalized_title_trgm'"
                 ") IS NOT NULL"
             )
         )
+        alias_index_exists = await session.scalar(
+            text(
+                "SELECT to_regclass("
+                "'public.ix_movie_qualities_normalized_title_trgm'"
+                ") IS NOT NULL"
+            )
+        )
 
     assert extension_exists is True
-    assert index_exists is True
+    assert canonical_index_exists is True
+    assert alias_index_exists is True
+
+
+
+@pytest.mark.asyncio
+async def test_quality_caption_english_title_acts_as_local_search_alias(
+    database: Database,
+) -> None:
+    movie_id = await seed_movie(
+        database,
+        title="La sociedad de la nieve",
+        normalized="la sociedad de la nieve",
+        year=2023,
+    )
+
+    async with database.session() as session, session.begin():
+        quality_row = await session.scalar(
+            select(MovieQuality).where(MovieQuality.movie_id == movie_id)
+        )
+        assert quality_row is not None
+        quality_row.extracted_title = "Society of the Snow"
+        quality_row.normalized_title = "society of the snow"
+
+    results = await MovieSearchService(database).search("Society of the Snow")
+
+    assert results
+    assert results[0].movie_id == movie_id
+
+
+@pytest.mark.asyncio
+async def test_requested_year_prefers_correct_same_title_release(
+    database: Database,
+) -> None:
+    old_id = await seed_movie(
+        database,
+        title="King Kong",
+        normalized="king kong",
+        year=1933,
+    )
+    new_id = await seed_movie(
+        database,
+        title="King Kong",
+        normalized="king kong",
+        year=2005,
+    )
+
+    results = await MovieSearchService(database).search("King Kong 2005")
+
+    assert results
+    assert results[0].movie_id == new_id
+    assert any(result.movie_id == old_id for result in results)
