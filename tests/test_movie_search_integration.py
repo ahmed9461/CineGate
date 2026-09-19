@@ -4,7 +4,7 @@ import os
 
 import pytest
 import pytest_asyncio
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, text
 
 from cinegate.db.models import (
     AppSetting,
@@ -275,21 +275,20 @@ async def test_movie_view_returns_only_real_qualities_in_stable_order(
 @pytest.mark.asyncio
 async def test_pg_trgm_extension_and_index_are_installed(database: Database) -> None:
     async with database.session() as session:
-        extension = await session.scalar(
-            select(func.count()).select_from(
-                select(1)
-                .where(
-                    func.exists(
-                        select(1).select_from(
-                            # Raw catalog relation name is fixed by us, not user input.
-                            # SQLAlchemy cannot map pg_extension as an ORM table here.
-                        )
-                    )
-                )
-                .subquery()
+        extension_exists = await session.scalar(
+            text(
+                "SELECT EXISTS ("
+                "SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm'"
+                ")"
+            )
+        )
+        index_exists = await session.scalar(
+            text(
+                "SELECT to_regclass("
+                "'public.ix_movies_normalized_title_trgm'"
+                ") IS NOT NULL"
             )
         )
 
-    # The migration round-trip in CI already validates executable DDL.
-    # Keep this smoke test intentionally lightweight.
-    assert extension is not None
+    assert extension_exists is True
+    assert index_exists is True
