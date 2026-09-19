@@ -90,8 +90,7 @@ class OwnerArchiveNotifier:
             )
 
     async def _store_notification_id(self, movie_id: int, message_id: int) -> int:
-        async with self._database.session() as session:
-            async with session.begin():
+        async with self._database.session() as session, session.begin():
                 stored = await session.scalar(
                     update(Movie)
                     .where(
