@@ -215,3 +215,25 @@ def test_repeated_parse_is_deterministic() -> None:
     ]
     parser = ArchiveParser()
     assert parser.parse(messages) == parser.parse(messages)
+
+
+def test_bulleted_modern_field_labels_are_supported() -> None:
+    groups = ArchiveParser().parse(
+        [
+            photo(
+                300,
+                (
+                    "-الفيلم: Bullet Style Movie\n"
+                    "-التصنيف: دراما\n"
+                    "-اللغة: الإنجليزية\n"
+                    "-السنة: 2024\n"
+                    "-القصة: قصة"
+                ),
+            ),
+            video(301, "Bullet Style Movie 2024 #720p"),
+        ]
+    )
+
+    assert len(groups) == 1
+    assert groups[0].status is GroupStatus.INDEXED
+    assert groups[0].display_title == "Bullet Style Movie"
