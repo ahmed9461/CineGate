@@ -81,13 +81,59 @@ Meaning the movie was saved with three associated qualities.
 
 If multiple movies are indexed together, notification may summarize all of them.
 
-### Pending archive detail
+### Confirmed archive parsing format
 
-**The exact real-world post structure has not been provided yet.**
+The owner supplied real archive examples on 2026-09-19. Two posting styles must be supported.
 
-Do not implement the final archive parser until sample poster + quality posts are supplied and documented.
+#### Modern/current style
 
-The parser must be designed around the owner’s actual channel format rather than forcing a new publishing format without approval.
+This is the primary style used now.
+
+Poster/info posts typically contain structured fields such as:
+
+- `الفيلم:`
+- `التصنيف:` / `النوع:`
+- `البلد:`
+- `اللغة:`
+- `الترجمة:`
+- `السنة:`
+- `التقييم:`
+- `القصة:`
+
+One or more quality videos follow the poster. Video captions normally contain the movie title plus a resolution marker such as `#480p`, `#720p`, or `#1080p`.
+
+#### Legacy style
+
+Historical posts may contain `#طلب_المتابعين` and any of these title-label variants:
+
+- `فيلم`
+- `فلم`
+- `الفيلم`
+- `الفلم`
+
+The hashtag is helpful but is not mandatory. Quality captions usually contain title + quality + bot username/noise text.
+
+#### Confirmed parser rule
+
+**Sequence is the primary linkage signal.** A valid poster opens a movie group. Following quality media are collected for that group until the next poster boundary or stream end, with confidence/safety checks.
+
+Exact title equality is not required.
+
+The parser must tolerate:
+
+- `&` vs `and`
+- punctuation differences such as `:`
+- small title spelling/format differences
+- poster title and quality-caption title being in different languages
+- bot usernames/noise in legacy captions
+
+Title normalization, year matching, and text similarity are supporting signals only.
+
+If a poster has no valid following quality media, it becomes an orphan/ignored-for-search group and must not enter the searchable catalog.
+
+Unsafe groups are marked ambiguous rather than force-linked.
+
+Full specification: `plans/0002-archive-format-and-parser.md`.
 
 ---
 
@@ -304,13 +350,12 @@ See `AGENTS.md`.
 
 Do not guess these:
 
-1. Exact archive post structure linking poster to 480p/720p/1080p/etc.
-2. Exact parsing rules — wait for real examples.
-3. Rewarded-ad network/provider.
-4. Final application technology stack and deployment topology.
-5. Final database choice.
-6. Initial-import UserBot library/implementation.
-7. Final owner/admin menu layout.
-8. Exact Telegram Bot API/library versions.
+1. Rewarded-ad network/provider.
+2. Final application technology stack and deployment topology.
+3. Final database choice.
+4. Initial-import UserBot library/implementation.
+5. Final owner/admin menu layout.
+6. Exact Telegram Bot API/library versions.
+7. Real-time archive edit/delete reconciliation behavior.
 
 These should be resolved through explicit plans and recorded in `docs/DECISIONS.md`.
