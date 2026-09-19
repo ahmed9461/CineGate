@@ -20,3 +20,16 @@ STALE_SEARCH = """انتهت صلاحية هذه النتيجة. اكتب اسم
 
 def render_search_results(count: int) -> str:
     return SEARCH_RESULTS.replace("%count%", str(count))
+
+
+REWARD_PROMPT = (
+    "🎬 %movie%\n"
+    "🎞 الجودة: %quality%\n\n"
+    "عليك مشاهدة إعلان قصير قبل استلام الجودة المطلوبة."
+)
+
+REWARD_NOT_CONFIGURED = "خدمة الإعلان غير مجهزة حاليًا. حاول لاحقًا."
+
+ACTIVE_REWARD_CONFLICT = (
+    "لديك طلب إعلان نشط لجودة %quality%. أكمله أولًا قبل اختيار جودة أخرى."
+)
