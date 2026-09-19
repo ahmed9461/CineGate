@@ -32,6 +32,7 @@ class DeliveryDeletionWorker:
         self._concurrency = max(1, min(25, concurrency))
 
     async def run(self, stop_event: asyncio.Event) -> None:
+        await self._delivery_service.recover_stale_sends()
         await self._delivery_service.recover_stale_deletions()
 
         while not stop_event.is_set():
