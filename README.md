@@ -1,12 +1,92 @@
 # CineGate
 
-CineGate is a Telegram-based movie search and delivery project backed by a private Telegram archive channel.
+CineGate is a Telegram movie-search and rewarded-delivery project backed by a private Telegram Archive Channel.
 
 ## Current phase
 
-**Foundation / planning.** No application code has been implemented yet.
+The application foundation and archive parser are implemented.
 
-The repository is intentionally documentation-first so progress is never lost and every implementation step has an explicit plan.
+Current stack:
+
+- Python 3.12
+- aiogram 3
+- FastAPI
+- PostgreSQL
+- SQLAlchemy 2 async + asyncpg
+- Alembic
+- pytest + Ruff
+
+The project intentionally does **not** include Redis, Celery, Kafka, or a microservice split at this stage. Additional infrastructure should only be added when a measured requirement justifies it.
+
+## Current implemented foundation
+
+- modern + legacy archive parsing
+- sequence-first poster/quality grouping
+- title normalization and typo-safe parser helpers
+- orphan/ambiguous group handling
+- deterministic duplicate-quality handling
+- initial PostgreSQL schema and migrations
+- persistent app-settings/message-template tables
+- async SQLAlchemy session foundation
+- FastAPI health endpoint
+- local PostgreSQL Compose service
+- CI for lint, tests, PostgreSQL migration round-trip, and Python compile checks
+
+User search, Telegram webhook routing, archive persistence, ads, movie delivery, and deletion are later planned phases.
+
+## Local development
+
+Requirements:
+
+- Python 3.12+
+- Docker / Docker Compose
+
+Create a local environment file:
+
+```bash
+cp .env.example .env
+```
+
+Fill only the local secrets/placeholders in `.env`.
+
+Start PostgreSQL:
+
+```bash
+export CINEGATE_POSTGRES_PASSWORD='choose-a-local-password'
+docker compose up -d postgres
+```
+
+Install the project:
+
+```bash
+python -m pip install -e ".[dev]"
+```
+
+Apply migrations:
+
+```bash
+alembic upgrade head
+```
+
+Run the HTTP app:
+
+```bash
+uvicorn cinegate.main:app --host 127.0.0.1 --port 8000
+```
+
+Health endpoint:
+
+```text
+GET /healthz
+```
+
+Quality checks:
+
+```bash
+ruff check .
+pytest -q
+python -m compileall -q src tests
+```
 
 ## Mandatory project workflow
 
@@ -21,7 +101,7 @@ Before doing any work, read:
 
 Every new feature, fix, refactor, migration, deployment change, or investigation must start with a plan file under `plans/` before implementation.
 
-After meaningful work, update the plan, project memory, project status, and progress log before ending the session.
+After meaningful work, update the active plan, project memory, project status, progress log, and any affected decisions/specification.
 
 ## Repository memory system
 
