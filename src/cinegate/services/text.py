@@ -53,7 +53,7 @@ def normalize_title(title: str | None) -> str:
 
     value = unicodedata.normalize("NFKC", title).casefold()
     value = _BOT_USERNAME_RE.sub(" ", value)
-    value = value.replace("&", " and ")
+    value = value.replace("&", " and ").replace("_", " ")
     value = _QUALITY_RE.sub(" ", value)
     value = _YEAR_RE.sub(" ", value)
     value = _PUNCTUATION_RE.sub(" ", value)
