@@ -13,6 +13,24 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: cinegate_ci
+          POSTGRES_USER: cinegate
+          POSTGRES_PASSWORD: cinegate_ci_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U cinegate -d cinegate_ci"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    env:
+      CINEGATE_DATABASE_URL: postgresql+asyncpg://cinegate:cinegate_ci_password@127.0.0.1:5432/cinegate_ci
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -31,6 +49,12 @@ jobs:
 
       - name: Tests
         run: pytest -q
+
+      - name: Migration round trip
+        run: |
+          alembic upgrade head
+          alembic downgrade base
+          alembic upgrade head
 
       - name: Compile
         run: python -m compileall -q src tests
