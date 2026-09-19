@@ -1,6 +1,6 @@
 # Plan 0005 — Direct movie search and movie-page UI
 
-**Status:** In progress  
+**Status:** Completed  
 **Created:** 2026-09-20  
 **Last updated:** 2026-09-20
 
@@ -232,48 +232,48 @@ No reward/delivery data yet.
 
 ### Search service
 
-- [ ] exact match ranks first
-- [ ] prefix match before fuzzy
-- [ ] typo query finds intended movie
-- [ ] low-similarity noise excluded
-- [ ] only indexed movies returned
-- [ ] movie without qualities excluded
-- [ ] result limit bounded
-- [ ] raw query length bounded
-- [ ] hostile-looking SQL text remains data and causes no SQL execution
+- [x] exact match ranks first
+- [x] prefix match before fuzzy
+- [x] typo query finds intended movie
+- [x] low-similarity noise excluded
+- [x] only indexed movies returned
+- [x] movie without qualities excluded
+- [x] result limit bounded
+- [x] raw query length bounded
+- [x] hostile-looking SQL text remains data and causes no SQL execution
 
 ### Search sessions
 
-- [ ] new session replaces previous nonce
-- [ ] stale nonce cannot claim movie
-- [ ] rapid two movie claims: only one wins
-- [ ] movie must belong to stored result IDs
-- [ ] failed copy can reset opening state
-- [ ] Back state transition is single-winner
+- [x] new session replaces previous nonce
+- [x] stale nonce cannot claim movie
+- [x] rapid two movie claims: only one wins
+- [x] movie must belong to stored result IDs
+- [x] failed copy can reset opening state
+- [x] Back state transition is single-winner
 
 ### Keyboards/callbacks
 
-- [ ] callback data stays below 64 bytes
-- [ ] styled result/quality buttons serialize
-- [ ] only actual qualities are rendered
-- [ ] quality order is stable
+- [x] callback data stays below 64 bytes
+- [x] styled result/quality buttons serialize
+- [x] only actual qualities are rendered
+- [x] quality order is stable
 
 ### Router/UI
 
-- [ ] normal private text triggers search
-- [ ] slash command does not trigger search
-- [ ] no result sends configured default
-- [ ] selecting movie copies correct archive poster
-- [ ] old result UI is removed after successful poster copy
-- [ ] rapid duplicate movie callback does not duplicate poster
-- [ ] Back reconstructs prior results
+- [x] normal private text triggers search
+- [x] slash command does not trigger search
+- [x] no result sends configured default
+- [x] selecting movie copies correct archive poster
+- [x] old result UI is removed after successful poster copy
+- [x] rapid duplicate movie callback does not duplicate poster
+- [x] Back reconstructs prior results
 
 ### Quality gates
 
-- [ ] Ruff
-- [ ] pytest
-- [ ] migration apply + rollback/restore
-- [ ] compileall
+- [x] Ruff
+- [x] pytest
+- [x] migration apply + rollback/restore
+- [x] compileall
 
 ## Review #1 — correctness
 
@@ -303,47 +303,101 @@ Review:
 
 ## Acceptance criteria
 
-- [ ] direct English text search works
-- [ ] typo tolerance uses indexed PostgreSQL search
-- [ ] results are relevant and bounded
-- [ ] no-result path is clear
-- [ ] movie callback is stale/rapid-safe
-- [ ] poster copied from archive without downloading
-- [ ] only real qualities shown
-- [ ] Back works from durable session
-- [ ] modern button styles supported
-- [ ] all checks pass
-- [ ] both reviews documented
-- [ ] memory/status/progress updated
+- [x] direct English text search works
+- [x] typo tolerance uses indexed PostgreSQL search
+- [x] results are relevant and bounded
+- [x] no-result path is clear
+- [x] movie callback is stale/rapid-safe
+- [x] poster copied from archive without downloading
+- [x] only real qualities shown
+- [x] Back works from durable session
+- [x] modern button styles supported
+- [x] all checks pass
+- [x] both reviews documented
+- [x] memory/status/progress updated
 
 ## Implementation steps
 
 - [x] 1. Create this plan before code.
-- [ ] 2. Add pg_trgm migration/index.
-- [ ] 3. Add search-session migration/model.
-- [ ] 4. Add float setting helper.
-- [ ] 5. Implement bounded PostgreSQL search service.
-- [ ] 6. Implement search session repository/state machine.
-- [ ] 7. Implement callback data and centralized keyboards.
-- [ ] 8. Implement user search/movie router.
-- [ ] 9. Wire router into runtime.
-- [ ] 10. Add PostgreSQL integration tests.
-- [ ] 11. Add UI/router unit tests.
-- [ ] 12. Run full CI.
-- [ ] 13. Correctness review/fixes.
-- [ ] 14. Performance/complexity review/fixes.
-- [ ] 15. Re-run CI.
-- [ ] 16. Update docs/memory/status.
-- [ ] 17. Mark complete.
+- [x] 2. Add pg_trgm migration/index.
+- [x] 3. Add search-session migration/model.
+- [x] 4. Add float setting helper.
+- [x] 5. Implement bounded PostgreSQL search service.
+- [x] 6. Implement search session repository/state machine.
+- [x] 7. Implement callback data and centralized keyboards.
+- [x] 8. Implement user search/movie router.
+- [x] 9. Wire router into runtime.
+- [x] 10. Add PostgreSQL integration tests.
+- [x] 11. Add UI/router unit tests.
+- [x] 12. Run full CI.
+- [x] 13. Correctness review/fixes.
+- [x] 14. Performance/complexity review/fixes.
+- [x] 15. Re-run CI.
+- [x] 16. Update docs/memory/status.
+- [x] 17. Mark complete.
 
 ## Progress notes
 
-### 2026-09-20
+### 2026-09-20 — implementation
 
 - Plan created before implementation.
 - PostgreSQL trigram search selected to avoid full-catalog Python fuzzy scans.
-- Modern Telegram button styling verified in current Bot API/aiogram docs.
+- Added `pg_trgm` GiST indexes for both canonical poster titles and quality-caption titles.
+- Quality-caption English titles act as local aliases, solving cases where the poster title is Spanish/French/etc. while the quality caption is English.
+- Added durable one-current-search session per Telegram user.
+- Added compact nonce-bound callback data.
+- Added styled result and quality keyboards.
+- Added direct private-text search, movie selection, Archive Channel poster copy, quality buttons, and Back navigation.
+- Added owner-editable search/no-result message-body lookup.
+- Wired user router into application runtime.
+
+### 2026-09-20 — review #1: correctness
+
+Findings and fixes:
+
+- Found the edge case movie title `1917`: generic year stripping could erase the whole title. Added trailing-release-year extraction that preserves year-only titles while still parsing `1917 2019` correctly.
+- Search originally considered canonical poster titles only. Real archive evidence requires English quality-caption titles to be searchable aliases; added indexed quality aliases.
+- First concurrent searches for a brand-new user could race row creation. Added a PostgreSQL transaction advisory lock scoped to that Telegram user only.
+- Stale result keyboards are protected with a random nonce and stored result IDs.
+- Rapid double-click on a movie is single-winner and produces one poster copy.
+- New search invalidates old callbacks.
+- Added cleanup if PostgreSQL fails after Telegram already sent a results message or copied a poster, preventing orphan UI on webhook retry.
+- No-result text was verified as database-editable.
+- Slash commands are not treated as movie searches.
+
+### 2026-09-20 — review #2: performance / complexity
+
+Findings and decisions:
+
+- No Python full-catalog fuzzy scan.
+- PostgreSQL KNN trigram queries are bounded and index-backed.
+- Tests verify both canonical and alias KNN queries are eligible for their GiST indexes.
+- Candidate sets are capped before Python ranking.
+- Search result limit is bounded to at most 10.
+- Only one durable search-session row exists per user; searches replace the row rather than creating an unbounded history.
+- Network calls occur outside the session-state locking transaction.
+- No Redis, Elasticsearch, Meilisearch, or extra cache/search service was added.
+- Movie poster delivery uses Telegram `copyMessage`; media is never downloaded by CineGate.
+
+### 2026-09-20 — final verification
+
+GitHub Actions with PostgreSQL 16:
+
+- Ruff: **all checks passed**
+- pytest: **87 passed**
+- Alembic migrations `0001 → 0006`: passed
+- full downgrade to base and restore to head: passed
+- Python compileall: passed
+- KNN trigram index eligibility checks: passed
+
+Two warnings are dependency deprecation notices from FastAPI/Starlette test internals, not CineGate code.
 
 ## Completion summary
 
-Pending.
+Plan 0005 is complete.
+
+CineGate now supports the full pre-ad user path:
+
+`type English title → ranked typo-tolerant results → select movie → copied Archive poster/info → available quality buttons → Back`
+
+**Next exact step:** create Plan 0006 before code for quality reward sessions, provider-neutral Mini App handoff, verified reward completion, Telegram archive delivery, and durable timed deletion. AdsGram-specific credentials/Block ID remain deferred until the external platform is finalized.
