@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from aiogram.enums import ButtonStyle
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 
 from cinegate.bot.callbacks import (
     MovieBackCallback,
@@ -70,3 +70,18 @@ def _movie_label(result: MovieSearchResult) -> str:
     if result.year is not None:
         return f"{result.display_title} ({result.year})"
     return result.display_title
+
+
+
+def build_reward_keyboard(url: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="مشاهدة الإعلان",
+                    web_app=WebAppInfo(url=url),
+                    style=ButtonStyle.SUCCESS,
+                )
+            ]
+        ]
+    )
