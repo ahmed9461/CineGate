@@ -7,6 +7,7 @@ from types import SimpleNamespace
 import pytest
 import pytest_asyncio
 from sqlalchemy import delete, select
+from sqlalchemy.exc import SQLAlchemyError
 
 from cinegate.bot.callbacks import MovieBackCallback, MovieSelectCallback
 from cinegate.bot.user_router import build_user_router
@@ -333,3 +334,79 @@ async def test_no_result_message_can_be_changed_from_database(
     await search_handler(incoming, bot=bot)
 
     assert incoming.answers[0].text == custom_text
+
+
+
+@pytest.mark.asyncio
+async def test_result_message_is_deleted_if_session_persistence_fails(
+    database: Database,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await seed_movie(database)
+    search = MovieSearchService(database)
+    sessions = SearchSessionService(database)
+    router = build_user_router(
+        database=database,
+        search=search,
+        sessions=sessions,
+    )
+    bot = FakeBot()
+
+    async def fail_set_result_message(**kwargs):
+        raise SQLAlchemyError("simulated persistence failure")
+
+    monkeypatch.setattr(
+        sessions,
+        "set_result_message",
+        fail_set_result_message,
+    )
+
+    search_handler = handler(router, "message", "direct_movie_search")
+    incoming = FakeIncomingMessage("Interstellar")
+
+    with pytest.raises(SQLAlchemyError):
+        await search_handler(incoming, bot=bot)
+
+    assert len(incoming.answers) == 1
+    assert (USER_ID, incoming.answers[0].message_id) in bot.deleted
+
+
+@pytest.mark.asyncio
+async def test_copied_poster_is_deleted_if_movie_state_persistence_fails(
+    database: Database,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await seed_movie(database)
+    search = MovieSearchService(database)
+    sessions = SearchSessionService(database)
+    router = build_user_router(
+        database=database,
+        search=search,
+        sessions=sessions,
+    )
+    bot = FakeBot()
+
+    search_handler = handler(router, "message", "direct_movie_search")
+    incoming = FakeIncomingMessage("Interstellar")
+    await search_handler(incoming, bot=bot)
+
+    button = incoming.answers[0].reply_markup.inline_keyboard[0][0]
+    assert button.callback_data is not None
+    callback_data = MovieSelectCallback.unpack(button.callback_data)
+
+    async def fail_complete_movie(**kwargs):
+        raise SQLAlchemyError("simulated persistence failure")
+
+    monkeypatch.setattr(sessions, "complete_movie", fail_complete_movie)
+
+    select_handler = handler(router, "callback_query", "select_movie")
+
+    with pytest.raises(SQLAlchemyError):
+        await select_handler(
+            FakeCallback(),
+            callback_data=callback_data,
+            bot=bot,
+        )
+
+    assert len(bot.copied) == 1
+    assert (USER_ID, 2000) in bot.deleted
