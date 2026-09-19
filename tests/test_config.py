@@ -1,8 +1,7 @@
-from pydantic import ValidationError
 import pytest
+from pydantic import ValidationError
 
 from cinegate.config import SecretsSettings
-
 
 _ENV_KEYS = (
     "CINEGATE_BOT_TOKEN",
