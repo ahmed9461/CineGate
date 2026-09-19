@@ -22,20 +22,21 @@ This roadmap is directional. Every phase requires its own detailed plan file bef
 - [x] Define incomplete/ambiguous group handling
 - [x] Define duplicate/idempotency requirements
 - [ ] Define real-time edit/delete reconciliation behavior
-- [ ] Implement parser fixtures/tests before production indexing
+- [x] Implement parser fixtures/tests before production indexing
 
-**Specification:** `plans/0002-archive-format-and-parser.md`
+**Specification:** `plans/0002-archive-format-and-parser.md`  
+**Implementation foundation:** `plans/0003-application-foundation-and-parser.md`
 
 ## Phase 2 — Application foundation
 
-- [ ] Select technology stack
-- [ ] Select database
-- [ ] Define service boundaries
-- [ ] Configuration/secret model
-- [ ] Database migrations
+- [x] Select technology stack
+- [x] Select database
+- [x] Define service boundaries
+- [x] Configuration/secret model
+- [x] Database migrations
 - [ ] Logging and error model
 - [ ] Owner bootstrap/access control
-- [ ] Basic health/diagnostics
+- [x] Basic health/diagnostics
 
 ## Phase 3 — Archive indexing & initial import
 
