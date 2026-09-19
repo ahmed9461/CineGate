@@ -24,3 +24,7 @@ def test_extract_year_and_quality() -> None:
 
 def test_clean_display_title_preserves_words_but_removes_year_quality() -> None:
     assert clean_display_title("Top Gun: Maverick 2022 #1080p") == "Top Gun: Maverick"
+
+
+def test_underscore_is_treated_as_a_separator() -> None:
+    assert normalize_title("Spider_Man 2002") == "spider man"
