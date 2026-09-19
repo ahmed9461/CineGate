@@ -28,6 +28,14 @@ class SettingsRepository:
             raise TypeError(f"setting {key!r} must contain an integer")
         return value
 
+    async def get_float(self, key: str) -> float | None:
+        value = await self.get(key)
+        if value is None:
+            return None
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise TypeError(f"setting {key!r} must contain a number")
+        return float(value)
+
     async def set(self, key: str, value: Any) -> None:
         statement = insert(AppSetting).values(key=key, value=value)
         statement = statement.on_conflict_do_update(
