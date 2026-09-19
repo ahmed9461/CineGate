@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from difflib import SequenceMatcher
-from typing import Iterable
 
 from cinegate.domain.archive import (
     ArchiveMessage,
@@ -20,6 +20,7 @@ from cinegate.services.text import (
     normalize_title,
     remove_quality_token,
     strip_bot_usernames,
+    strip_year,
 )
 
 _FIELD_RE = re.compile(r"^\s*([^:：\n]{1,32})\s*[:：]\s*(.+?)\s*$")
@@ -33,6 +34,7 @@ _SUPPORTING_POSTER_FIELDS = frozenset(
 
 _ACCEPT_THRESHOLD = 60
 _AMBIGUOUS_THRESHOLD = 40
+_MAX_PARSED_CAPTION_CHARS = 8192
 
 
 @dataclass(frozen=True, slots=True)
@@ -151,10 +153,11 @@ class ArchiveParser:
 
 
 def _detect_poster(message: ArchiveMessage) -> _PosterCandidate | None:
-    if message.media_kind is not MediaKind.PHOTO or not message.caption:
+    caption = _bounded_caption(message.caption)
+    if message.media_kind is not MediaKind.PHOTO or not caption:
         return None
 
-    fields = _extract_fields(message.caption)
+    fields = _extract_fields(caption)
     title_entry = next(
         ((label, value) for label, value in fields.items() if label in _TITLE_LABELS),
         None,
@@ -165,7 +168,7 @@ def _detect_poster(message: ArchiveMessage) -> _PosterCandidate | None:
     title_label, raw_title = title_entry
     supporting_count = sum(label in _SUPPORTING_POSTER_FIELDS for label in fields)
 
-    is_legacy = _FOLLOWER_TAG in message.caption or title_label in _LEGACY_ONLY_TITLE_LABELS
+    is_legacy = _FOLLOWER_TAG in caption or title_label in _LEGACY_ONLY_TITLE_LABELS
     style = ParserStyle.LEGACY if is_legacy else ParserStyle.MODERN
 
     if style is ParserStyle.MODERN:
@@ -173,11 +176,11 @@ def _detect_poster(message: ArchiveMessage) -> _PosterCandidate | None:
             return None
         confidence = min(99, 88 + min(supporting_count, 5) * 2)
     else:
-        if supporting_count == 0 and _FOLLOWER_TAG not in message.caption:
+        if supporting_count == 0 and _FOLLOWER_TAG not in caption:
             return None
-        confidence = 88 if _FOLLOWER_TAG in message.caption else 82
+        confidence = 88 if _FOLLOWER_TAG in caption else 82
 
-    year = _extract_year_from_fields(fields) or extract_year(raw_title) or extract_year(message.caption)
+    year = _extract_year_from_fields(fields) or extract_year(raw_title)
     display_title = clean_display_title(raw_title)
     normalized_title = normalize_title(raw_title)
     if not display_title or not normalized_title:
@@ -195,22 +198,23 @@ def _detect_poster(message: ArchiveMessage) -> _PosterCandidate | None:
 
 
 def _detect_quality(message: ArchiveMessage) -> _QualityCandidate | None:
-    if message.media_kind not in {MediaKind.VIDEO, MediaKind.DOCUMENT} or not message.caption:
+    caption = _bounded_caption(message.caption)
+    if message.media_kind not in {MediaKind.VIDEO, MediaKind.DOCUMENT} or not caption:
         return None
 
-    quality = extract_quality(message.caption)
+    quality = extract_quality(caption)
     if quality is None:
         return None
 
-    fields = _extract_fields(message.caption)
+    fields = _extract_fields(caption)
     labeled_title = next(
         (value for label, value in fields.items() if label in _TITLE_LABELS),
         None,
     )
 
-    raw_title = labeled_title or _extract_freeform_quality_title(message.caption)
+    raw_title = labeled_title or _extract_freeform_quality_title(caption)
     normalized = normalize_title(raw_title) if raw_title else None
-    year = extract_year(raw_title) or extract_year(message.caption)
+    year = extract_year(raw_title) or extract_year(caption)
 
     return _QualityCandidate(
         message=message,
@@ -219,6 +223,12 @@ def _detect_quality(message: ArchiveMessage) -> _QualityCandidate | None:
         normalized_title=normalized or None,
         year=year,
     )
+
+
+def _bounded_caption(caption: str | None) -> str:
+    if not caption:
+        return ""
+    return caption[:_MAX_PARSED_CAPTION_CHARS]
 
 
 def _extract_fields(caption: str) -> dict[str, str]:
@@ -235,8 +245,7 @@ def _extract_fields(caption: str) -> dict[str, str]:
 
 
 def _extract_year_from_fields(fields: dict[str, str]) -> int | None:
-    year_value = fields.get("السنة")
-    return extract_year(year_value)
+    return extract_year(fields.get("السنة"))
 
 
 def _extract_freeform_quality_title(caption: str) -> str | None:
@@ -245,13 +254,14 @@ def _extract_freeform_quality_title(caption: str) -> str | None:
         if not line:
             continue
 
-        if _FIELD_RE.match(line):
-            label = _FIELD_RE.match(line)
-            if label and label.group(1).strip().lstrip("#").casefold() not in _TITLE_LABELS:
+        field_match = _FIELD_RE.match(line)
+        if field_match is not None:
+            label = field_match.group(1).strip().lstrip("#").casefold()
+            if label not in _TITLE_LABELS:
                 continue
 
-        candidate = strip_bot_usernames(remove_quality_token(line)).strip(" -–—:：")
-        candidate = re.sub(r"(?<!\d)((?:19|20|21)\d{2})(?!\d)", " ", candidate)
+        candidate = strip_bot_usernames(remove_quality_token(line))
+        candidate = strip_year(candidate).strip(" -–—:：")
         candidate = " ".join(candidate.split())
         if candidate and not candidate.startswith("#"):
             return candidate
