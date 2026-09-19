@@ -20,6 +20,14 @@ class SettingsRepository:
             select(AppSetting.value).where(AppSetting.key == key)
         )
 
+    async def get_many(self, keys: tuple[str, ...]) -> dict[str, Any]:
+        if not keys:
+            return {}
+        rows = await self._session.execute(
+            select(AppSetting.key, AppSetting.value).where(AppSetting.key.in_(keys))
+        )
+        return {row.key: row.value for row in rows}
+
     async def get_int(self, key: str) -> int | None:
         value = await self.get(key)
         if value is None:
