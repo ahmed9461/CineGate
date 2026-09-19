@@ -13,6 +13,8 @@ from cinegate.repositories.settings import SettingsRepository
 
 logger = logging.getLogger(__name__)
 
+_MAX_CONVERGENCE_PASSES = 4
+
 
 @dataclass(frozen=True, slots=True)
 class _NoticeState:
@@ -32,14 +34,17 @@ class OwnerArchiveNotifier:
         self._bot = bot
 
     async def notify_movie(self, movie_id: int) -> None:
-        # Two passes converge if another quality commits while Telegram I/O is
-        # in flight, without creating an unbounded retry loop in one webhook.
-        for _ in range(2):
+        # A stale concurrent notifier can finish after a newer one and briefly
+        # overwrite the owner message with an older count. A forced refresh
+        # converges back to the latest count without an unbounded loop.
+        force_refresh = False
+        for _ in range(_MAX_CONVERGENCE_PASSES):
             state = await self._load_state(movie_id)
+            if state is None or state.quality_count == 0:
+                return
             if (
-                state is None
-                or state.quality_count == 0
-                or state.quality_count <= state.notified_quality_count
+                not force_refresh
+                and state.quality_count <= state.notified_quality_count
             ):
                 return
 
@@ -70,11 +75,18 @@ class OwnerArchiveNotifier:
             await self._mark_notified(movie_id, state.quality_count)
 
             latest = await self._load_state(movie_id)
-            if (
-                latest is None
-                or latest.quality_count <= latest.notified_quality_count
-            ):
+            if latest is None:
                 return
+            if latest.quality_count > state.quality_count:
+                force_refresh = True
+                continue
+            return
+
+        logger.warning(
+            "Owner notification did not converge after %s passes movie_id=%s",
+            _MAX_CONVERGENCE_PASSES,
+            movie_id,
+        )
 
     async def _load_state(self, movie_id: int) -> _NoticeState | None:
         async with self._database.session() as session:
