@@ -3,7 +3,7 @@ from __future__ import annotations
 import secrets
 from dataclasses import dataclass
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 
 from cinegate.db.models import UserSearchSession
 from cinegate.db.session import Database
@@ -46,6 +46,9 @@ class SearchSessionService:
         nonce = secrets.token_urlsafe(6)
 
         async with self._database.session() as session, session.begin():
+            await session.execute(
+                select(func.pg_advisory_xact_lock(telegram_user_id))
+            )
             current = await session.scalar(
                 select(UserSearchSession)
                 .where(UserSearchSession.telegram_user_id == telegram_user_id)
