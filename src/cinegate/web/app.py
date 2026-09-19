@@ -10,6 +10,7 @@ from fastapi import FastAPI, HTTPException, Request, Response, status
 from pydantic import ValidationError
 
 from cinegate.runtime import AppRuntime, build_runtime
+from cinegate.web.rewards import build_reward_router
 
 RuntimeFactory = Callable[[], AppRuntime]
 
@@ -19,6 +20,7 @@ def create_app(runtime_factory: RuntimeFactory = build_runtime) -> FastAPI:
     async def lifespan(app: FastAPI):
         runtime = runtime_factory()
         app.state.runtime = runtime
+        await runtime.start()
         try:
             yield
         finally:
@@ -31,6 +33,8 @@ def create_app(runtime_factory: RuntimeFactory = build_runtime) -> FastAPI:
         redoc_url=None,
         lifespan=lifespan,
     )
+
+    app.include_router(build_reward_router())
 
     @app.get("/healthz", tags=["system"])
     async def healthz() -> dict[str, str]:
