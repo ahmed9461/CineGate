@@ -119,8 +119,8 @@ async def test_prefix_match_ranks_before_fuzzy(database: Database) -> None:
     )
     await seed_movie(
         database,
-        title="Interspecies",
-        normalized="interspecies",
+        title="Winter",
+        normalized="winter",
         year=2020,
     )
 
