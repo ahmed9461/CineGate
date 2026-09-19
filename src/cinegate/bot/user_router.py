@@ -17,19 +17,26 @@ from cinegate.bot.callbacks import (
 )
 from cinegate.bot.keyboards import (
     build_quality_keyboard,
+    build_reward_keyboard,
     build_search_results_keyboard,
 )
 from cinegate.db.session import Database
+from cinegate.domain.rewards import ActiveRewardConflict, RewardQualityUnavailable
 from cinegate.domain.search import SearchQueryError
 from cinegate.presentation.messages import (
+    ACTIVE_REWARD_CONFLICT,
     MOVIE_UNAVAILABLE,
     NO_SEARCH_RESULTS,
+    REWARD_NOT_CONFIGURED,
+    REWARD_PROMPT,
     STALE_SEARCH,
     WELCOME,
     render_search_results,
 )
+from cinegate.repositories.settings import SettingsRepository
 from cinegate.repositories.templates import MessageTemplateRepository
 from cinegate.services.movie_search import MovieSearchService
+from cinegate.services.reward_sessions import RewardSessionService
 from cinegate.services.search_sessions import SearchSessionService
 from cinegate.services.text import normalize_title
 
@@ -41,6 +48,7 @@ def build_user_router(
     database: Database,
     search: MovieSearchService,
     sessions: SearchSessionService,
+    rewards: RewardSessionService,
 ) -> Router:
     router = Router(name="users")
 
@@ -250,9 +258,11 @@ def build_user_router(
     async def select_quality(
         callback: CallbackQuery,
         callback_data: QualitySelectCallback,
+        bot: Bot,
     ) -> None:
+        user_id = callback.from_user.id
         current = await sessions.get_current(
-            telegram_user_id=callback.from_user.id,
+            telegram_user_id=user_id,
             nonce=callback_data.nonce,
         )
         if (
@@ -268,12 +278,100 @@ def build_user_router(
             await _safe_callback_answer(callback, MOVIE_UNAVAILABLE, show_alert=True)
             return
 
-        await _safe_callback_answer(
-            callback,
-            "تم اختيار الجودة. سيتم ربطها بالإعلان في المرحلة التالية.",
+        reward_config = await _reward_config(database)
+        if reward_config is None:
+            await _safe_callback_answer(
+                callback,
+                REWARD_NOT_CONFIGURED,
+                show_alert=True,
+            )
+            return
+
+        public_base_url, _block_id = reward_config
+
+        try:
+            reward, _created = await rewards.get_or_create(
+                telegram_user_id=user_id,
+                movie_id=view.movie_id,
+                quality=callback_data.quality,
+            )
+        except ActiveRewardConflict as exc:
+            text = ACTIVE_REWARD_CONFLICT.replace(
+                "%quality%",
+                exc.session.quality,
+            )
+            await _safe_callback_answer(callback, text, show_alert=True)
+            return
+        except RewardQualityUnavailable:
+            await _safe_callback_answer(callback, MOVIE_UNAVAILABLE, show_alert=True)
+            return
+
+        claimed = await rewards.claim_prompt(
+            session_id=reward.id,
+            telegram_user_id=user_id,
+        )
+        if not claimed:
+            await _safe_callback_answer(
+                callback,
+                "طلب الإعلان جاهز بالفعل.",
+            )
+            return
+
+        await _safe_callback_answer(callback, "جاري تجهيز الإعلان...")
+
+        prompt = await _template(database, "reward_prompt", REWARD_PROMPT)
+        prompt = (
+            prompt.replace("%movie%", view.display_title)
+            .replace("%quality%", callback_data.quality)
+        )
+        miniapp_url = (
+            f"{public_base_url.rstrip('/')}/miniapp/reward/{reward.id}"
         )
 
+        try:
+            sent = await bot.send_message(
+                user_id,
+                prompt,
+                reply_markup=build_reward_keyboard(miniapp_url),
+            )
+        except TelegramAPIError:
+            await rewards.reset_prompt_claim(
+                session_id=reward.id,
+                telegram_user_id=user_id,
+            )
+            raise
+
+        try:
+            stored = await rewards.complete_prompt(
+                session_id=reward.id,
+                telegram_user_id=user_id,
+                message_id=sent.message_id,
+            )
+        except SQLAlchemyError:
+            await _safe_delete(bot, user_id, sent.message_id)
+            raise
+
+        if not stored:
+            await _safe_delete(bot, user_id, sent.message_id)
+
     return router
+
+
+async def _reward_config(database: Database) -> tuple[str, str] | None:
+    async with database.session() as session:
+        values = await SettingsRepository(session).get_many(
+            ("public_base_url", "adsgram_block_id")
+        )
+
+    public_base_url = values.get("public_base_url")
+    block_id = values.get("adsgram_block_id")
+    if not isinstance(public_base_url, str) or not public_base_url.startswith(
+        "https://"
+    ):
+        return None
+    if not isinstance(block_id, str) or not block_id.strip():
+        return None
+    return public_base_url.rstrip("/"), block_id.strip()
 
 
 async def _template(database: Database, key: str, default: str) -> str:
