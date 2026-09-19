@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 
 from aiogram import Router
-from aiogram.exceptions import TelegramAPIError
+from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from aiogram.types import Message
 
 from cinegate.bot.adapters import telegram_message_to_archive
@@ -31,11 +31,13 @@ def build_archive_router(
 
         try:
             await notifier.notify_movie(result.movie_id)
-        except TelegramAPIError:
-            # Indexing already committed. Owner notification is useful but
-            # must never roll back or corrupt archived movie data.
+        except (TelegramBadRequest, TelegramForbiddenError):
+            # Permanent Telegram-side notification problems should not make
+            # Telegram retry an archive update forever. The durable notified
+            # count stays behind, so a later valid update/configuration can
+            # attempt the notification again.
             logger.warning(
-                "Owner archive notification failed for movie_id=%s",
+                "Permanent owner archive notification failure movie_id=%s",
                 result.movie_id,
                 exc_info=True,
             )
