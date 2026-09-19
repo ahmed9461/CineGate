@@ -20,6 +20,7 @@ class _NoticeState:
     movie_id: int
     display_title: str
     quality_count: int
+    notified_quality_count: int
     notification_message_id: int | None
 
 
@@ -31,18 +32,30 @@ class OwnerArchiveNotifier:
         self._bot = bot
 
     async def notify_movie(self, movie_id: int) -> None:
-        # Two passes are enough to converge if another quality commits while
-        # the first Telegram request is in flight, without an unbounded loop.
+        # Two passes converge if another quality commits while Telegram I/O is
+        # in flight, without creating an unbounded retry loop in one webhook.
         for _ in range(2):
             state = await self._load_state(movie_id)
-            if state is None or state.quality_count == 0:
+            if (
+                state is None
+                or state.quality_count == 0
+                or state.quality_count <= state.notified_quality_count
+            ):
                 return
 
             text = self._render(state)
             if state.notification_message_id is None:
                 sent = await self._bot.send_message(state.owner_chat_id, text)
-                stored_id = await self._store_notification_id(movie_id, sent.message_id)
-                if stored_id != sent.message_id:
+                canonical_id = await self._store_notification_id(
+                    movie_id,
+                    sent.message_id,
+                )
+                if canonical_id != sent.message_id:
+                    await self._edit_notice(
+                        chat_id=state.owner_chat_id,
+                        message_id=canonical_id,
+                        text=text,
+                    )
                     await self._delete_duplicate_notice(
                         chat_id=state.owner_chat_id,
                         message_id=sent.message_id,
@@ -54,8 +67,13 @@ class OwnerArchiveNotifier:
                     text=text,
                 )
 
+            await self._mark_notified(movie_id, state.quality_count)
+
             latest = await self._load_state(movie_id)
-            if latest is None or latest.quality_count == state.quality_count:
+            if (
+                latest is None
+                or latest.quality_count <= latest.notified_quality_count
+            ):
                 return
 
     async def _load_state(self, movie_id: int) -> _NoticeState | None:
@@ -70,6 +88,7 @@ class OwnerArchiveNotifier:
                         Movie.id,
                         Movie.display_title,
                         Movie.owner_notification_message_id,
+                        Movie.owner_notification_quality_count,
                         func.count(MovieQuality.id).label("quality_count"),
                     )
                     .outerjoin(MovieQuality, MovieQuality.movie_id == Movie.id)
@@ -86,27 +105,42 @@ class OwnerArchiveNotifier:
                 movie_id=row.id,
                 display_title=row.display_title,
                 quality_count=int(row.quality_count or 0),
+                notified_quality_count=int(row.owner_notification_quality_count or 0),
                 notification_message_id=row.owner_notification_message_id,
             )
 
     async def _store_notification_id(self, movie_id: int, message_id: int) -> int:
         async with self._database.session() as session, session.begin():
-                stored = await session.scalar(
-                    update(Movie)
-                    .where(
-                        Movie.id == movie_id,
-                        Movie.owner_notification_message_id.is_(None),
-                    )
-                    .values(owner_notification_message_id=message_id)
-                    .returning(Movie.owner_notification_message_id)
+            stored = await session.scalar(
+                update(Movie)
+                .where(
+                    Movie.id == movie_id,
+                    Movie.owner_notification_message_id.is_(None),
                 )
-                if stored is not None:
-                    return int(stored)
+                .values(owner_notification_message_id=message_id)
+                .returning(Movie.owner_notification_message_id)
+            )
+            if stored is not None:
+                return int(stored)
 
-                existing = await session.scalar(
-                    select(Movie.owner_notification_message_id).where(Movie.id == movie_id)
+            existing = await session.scalar(
+                select(Movie.owner_notification_message_id).where(Movie.id == movie_id)
+            )
+            return int(existing or message_id)
+
+    async def _mark_notified(self, movie_id: int, quality_count: int) -> None:
+        async with self._database.session() as session, session.begin():
+            await session.execute(
+                update(Movie)
+                .where(Movie.id == movie_id)
+                .values(
+                    owner_notification_quality_count=func.greatest(
+                        Movie.owner_notification_quality_count,
+                        quality_count,
+                    ),
+                    updated_at=func.now(),
                 )
-                return int(existing or message_id)
+            )
 
     async def _edit_notice(self, *, chat_id: int, message_id: int, text: str) -> None:
         try:
