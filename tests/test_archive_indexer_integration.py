@@ -406,3 +406,86 @@ async def test_duplicate_update_retries_notice_until_notification_is_recorded(
     await notifier.notify_movie(duplicate_before_notice.movie_id)
     assert len(bot.sent) == 1
     assert bot.edited == []
+
+
+
+class BlockingFirstSendBot(FakeBot):
+    def __init__(self) -> None:
+        super().__init__()
+        self.first_send_started = asyncio.Event()
+        self.release_first_send = asyncio.Event()
+        self.messages: dict[int, str] = {}
+
+    async def send_message(self, chat_id: int, text: str):
+        message_id = self._next_message_id
+        self._next_message_id += 1
+        self.sent.append((chat_id, text))
+        self.messages[message_id] = text
+
+        if len(self.sent) == 1:
+            self.first_send_started.set()
+            await self.release_first_send.wait()
+
+        return SimpleNamespace(message_id=message_id)
+
+    async def edit_message_text(self, *, chat_id: int, message_id: int, text: str):
+        await super().edit_message_text(
+            chat_id=chat_id,
+            message_id=message_id,
+            text=text,
+        )
+        self.messages[message_id] = text
+
+    async def delete_message(self, *, chat_id: int, message_id: int):
+        await super().delete_message(chat_id=chat_id, message_id=message_id)
+        self.messages.pop(message_id, None)
+
+
+@pytest.mark.asyncio
+async def test_concurrent_owner_notifiers_converge_to_latest_quality_count(
+    database: Database,
+) -> None:
+    await set_setting(database, "archive_channel_id", ARCHIVE_CHANNEL_ID)
+    await set_setting(database, "owner_chat_id", 777)
+
+    indexer = ArchiveIndexService(database)
+    await indexer.ingest(channel_id=ARCHIVE_CHANNEL_ID, message=modern_poster(100))
+    first = await indexer.ingest(
+        channel_id=ARCHIVE_CHANNEL_ID,
+        message=quality(101, resolution="720p"),
+    )
+    assert first.movie_id is not None
+
+    bot = BlockingFirstSendBot()
+    notifier = OwnerArchiveNotifier(database, bot)  # type: ignore[arg-type]
+
+    first_notice = asyncio.create_task(notifier.notify_movie(first.movie_id))
+    await bot.first_send_started.wait()
+
+    second = await indexer.ingest(
+        channel_id=ARCHIVE_CHANNEL_ID,
+        message=quality(102, resolution="1080p"),
+    )
+    assert second.quality_count == 2
+
+    second_notice = asyncio.create_task(notifier.notify_movie(first.movie_id))
+    await asyncio.sleep(0)
+    bot.release_first_send.set()
+
+    await asyncio.gather(first_notice, second_notice)
+
+    async with database.session() as session:
+        row = (
+            await session.execute(
+                select(
+                    Movie.owner_notification_message_id,
+                    Movie.owner_notification_quality_count,
+                ).where(Movie.id == first.movie_id)
+            )
+        ).one()
+
+    assert row.owner_notification_message_id is not None
+    assert row.owner_notification_quality_count == 2
+    assert bot.messages[row.owner_notification_message_id] == (
+        "✅ تم حفظ منشورات جديدة\n\n1- Interstellar (2)"
+    )
