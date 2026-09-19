@@ -248,3 +248,18 @@ def test_out_of_order_messages_are_rejected_instead_of_sorted_in_memory() -> Non
                 video(199, "Later 2025 #720p"),
             ]
         )
+
+
+def test_legacy_alfilm_without_follower_hashtag_is_classified_legacy() -> None:
+    group = ArchiveParser().parse(
+        [
+            photo(
+                400,
+                "الفيلم: Old Format 2018\nالنوع: دراما\nاللغة: الإنجليزية\nالقصة: قصة",
+            ),
+            video(401, "Old Format 2018 #720p"),
+        ]
+    )[0]
+
+    assert group.status is GroupStatus.INDEXED
+    assert group.parser_style is ParserStyle.LEGACY
