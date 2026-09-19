@@ -91,6 +91,21 @@ Owner sends future movie posts to the Archive Channel as part of normal publishi
 
 CineGate indexes them and reports successful saved groups to the owner.
 
+### Archive parsing
+
+CineGate supports two real posting styles:
+
+- **Modern/current:** structured poster metadata (for example `الفيلم:`, `السنة:`, `القصة:`) followed by one or more quality media posts with quality markers such as `#480p`, `#720p`, or `#1080p`.
+- **Legacy/historical:** older poster metadata that may include `#طلب_المتابعين` and title-label variants such as `فيلم`, `فلم`, `الفيلم`, or `الفلم`, followed by quality media captions that may include extra bot-username/noise text.
+
+Grouping is **sequence-first**. The poster opens a movie group and following quality media are associated with it until a new poster boundary or stream end, subject to safety checks.
+
+Title normalization and similarity help validation but exact title equality is not required. This intentionally tolerates `&` vs `and`, punctuation differences, spelling/format variation, and occasional poster/video title language differences.
+
+A poster with no accepted quality media is not searchable. Unsafe associations are classified as ambiguous rather than force-linked.
+
+See `plans/0002-archive-format-and-parser.md`.
+
 ## Owner experience
 
 Owner/admin functionality should make routine changes possible without code edits/restarts.
@@ -157,7 +172,7 @@ Must handle safely:
 
 ## Not finalized
 
-- exact archive parser rules
+- real-time archive edit/delete reconciliation behavior
 - ad network
 - stack
 - database
