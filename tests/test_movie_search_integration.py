@@ -350,3 +350,34 @@ async def test_requested_year_prefers_correct_same_title_release(
     assert results
     assert results[0].movie_id == new_id
     assert any(result.movie_id == old_id for result in results)
+
+
+
+@pytest.mark.asyncio
+async def test_trigram_knn_queries_are_index_eligible(database: Database) -> None:
+    async with database.session() as session, session.begin():
+        await session.execute(text("SET LOCAL enable_seqscan = off"))
+
+        canonical_plan_rows = await session.execute(
+            text(
+                "EXPLAIN (COSTS OFF) "
+                "SELECT id FROM movies "
+                "ORDER BY normalized_title <-> 'interstellar' "
+                "LIMIT 20"
+            )
+        )
+        alias_plan_rows = await session.execute(
+            text(
+                "EXPLAIN (COSTS OFF) "
+                "SELECT id FROM movie_qualities "
+                "WHERE normalized_title IS NOT NULL "
+                "ORDER BY normalized_title <-> 'interstellar' "
+                "LIMIT 20"
+            )
+        )
+
+    canonical_plan = "\n".join(row[0] for row in canonical_plan_rows)
+    alias_plan = "\n".join(row[0] for row in alias_plan_rows)
+
+    assert "ix_movies_normalized_title_trgm" in canonical_plan
+    assert "ix_movie_qualities_normalized_title_trgm" in alias_plan
