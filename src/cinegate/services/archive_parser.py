@@ -28,6 +28,7 @@ _FOLLOWER_TAG = "#طلب_المتابعين"
 
 _TITLE_LABELS = frozenset({"الفيلم", "فيلم", "فلم", "الفلم"})
 _LEGACY_ONLY_TITLE_LABELS = frozenset({"فيلم", "فلم", "الفلم"})
+_MODERN_SIGNATURE_FIELDS = frozenset({"التصنيف", "السنة", "التقييم"})
 _SUPPORTING_POSTER_FIELDS = frozenset(
     {"التصنيف", "النوع", "البلد", "اللغة", "الترجمة", "السنة", "التقييم", "القصة"}
 )
@@ -172,7 +173,12 @@ def _detect_poster(message: ArchiveMessage) -> _PosterCandidate | None:
     title_label, raw_title = title_entry
     supporting_count = sum(label in _SUPPORTING_POSTER_FIELDS for label in fields)
 
-    is_legacy = _FOLLOWER_TAG in caption or title_label in _LEGACY_ONLY_TITLE_LABELS
+    has_modern_signature = any(label in _MODERN_SIGNATURE_FIELDS for label in fields)
+    is_legacy = (
+        _FOLLOWER_TAG in caption
+        or title_label in _LEGACY_ONLY_TITLE_LABELS
+        or (title_label == "الفيلم" and not has_modern_signature)
+    )
     style = ParserStyle.LEGACY if is_legacy else ParserStyle.MODERN
 
     if style is ParserStyle.MODERN:
