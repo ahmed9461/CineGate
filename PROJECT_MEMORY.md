@@ -426,7 +426,49 @@ See `plans/0004-telegram-webhook-and-archive-indexer.md`.
 
 ---
 
-## 15. Pending decisions / information
+## 15. Implemented search and movie page
+
+Plan 0005 completed the pre-ad end-user flow.
+
+Implemented:
+
+- direct private-text search; no search button/mode required
+- English-title normalization with typo tolerance
+- PostgreSQL `pg_trgm` GiST KNN search; no Python full-catalog scan
+- canonical poster-title search
+- quality-caption title aliases, allowing an English video title to find a movie whose poster title is in another language
+- release-year-aware ranking for duplicate titles
+- safe handling of year-only movie titles such as `1917`
+- result limits and bounded candidate pools
+- durable single-current search session per Telegram user
+- nonce-bound callbacks that invalidate stale keyboards
+- rapid double-click single-winner movie opening
+- Telegram `copyMessage` of the poster/info directly from Archive Channel
+- actual-available-quality buttons only
+- styled inline buttons
+- Back navigation
+- owner-editable search/no-result message bodies through `message_templates`
+- cleanup of Telegram UI if DB persistence fails after a Telegram send/copy
+
+Migrations:
+
+- `0004`: pg_trgm + canonical-title GiST index
+- `0005`: `user_search_sessions`
+- `0006`: quality-title alias GiST index
+
+Last Plan 0005 verification:
+
+- Ruff passed
+- **87 tests passed**
+- migrations 0001→0006, full downgrade/restore passed
+- compileall passed
+- canonical and alias KNN queries verified index-eligible
+
+See `plans/0005-search-and-movie-page.md`.
+
+---
+
+## 16. Pending decisions / information
 
 Do not guess these:
 
