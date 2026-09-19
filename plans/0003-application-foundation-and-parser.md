@@ -1,6 +1,6 @@
 # Plan 0003 — Application foundation and archive parser implementation
 
-**Status:** In progress  
+**Status:** Completed  
 **Created:** 2026-09-20  
 **Last updated:** 2026-09-20
 
@@ -205,57 +205,57 @@ Even though the real-time indexer is later, schema and service boundaries must m
 ## Implementation steps
 
 - [x] 1. Write this plan before code.
-- [ ] 2. Create Python project/dependency configuration.
-- [ ] 3. Create minimal package structure and secrets configuration.
-- [ ] 4. Add async database foundation/models.
-- [ ] 5. Add initial Alembic migration.
-- [ ] 6. Implement parser domain types and normalization.
-- [ ] 7. Implement modern/legacy parser state machine.
-- [ ] 8. Add parser test fixtures/cases from Plan 0002.
-- [ ] 9. Add FastAPI health endpoint.
-- [ ] 10. Add local PostgreSQL Compose and non-secret example config.
-- [ ] 11. Add CI checks.
-- [ ] 12. Run tests, lint, compile/import smoke checks.
-- [ ] 13. Functional review #1 and fix all findings.
-- [ ] 14. Critical performance/complexity review #2 and remove unnecessary complexity.
-- [ ] 15. Re-run all checks.
-- [ ] 16. Update memory/status/decisions/progress/roadmap.
-- [ ] 17. Mark plan complete only if acceptance criteria are met.
+- [x] 2. Create Python project/dependency configuration.
+- [x] 3. Create minimal package structure and secrets configuration.
+- [x] 4. Add async database foundation/models.
+- [x] 5. Add initial Alembic migration.
+- [x] 6. Implement parser domain types and normalization.
+- [x] 7. Implement modern/legacy parser state machine.
+- [x] 8. Add parser test fixtures/cases from Plan 0002.
+- [x] 9. Add FastAPI health endpoint.
+- [x] 10. Add local PostgreSQL Compose and non-secret example config.
+- [x] 11. Add CI checks.
+- [x] 12. Run tests, lint, compile/import smoke checks.
+- [x] 13. Functional review #1 and fix all findings.
+- [x] 14. Critical performance/complexity review #2 and remove unnecessary complexity.
+- [x] 15. Re-run all checks.
+- [x] 16. Update memory/status/decisions/progress/roadmap.
+- [x] 17. Mark plan complete only if acceptance criteria are met.
 
 ## Tests to implement/run
 
 ### Parser
 
-- [ ] modern poster + one quality
-- [ ] modern poster + multiple qualities
-- [ ] legacy poster + quality
-- [ ] all four legacy title-label variants
-- [ ] optional `#طلب_المتابعين`
-- [ ] poster with no quality -> orphan
-- [ ] quality without poster -> ignored
-- [ ] `&` vs `and`
-- [ ] punctuation/colon differences
-- [ ] cross-language poster/video title with contiguous sequence
-- [ ] conflicting year quality is not blindly accepted
-- [ ] duplicate quality deterministically keeps newest
-- [ ] new poster closes previous group
-- [ ] unrelated/noise handling
-- [ ] repeated parsing returns same result
+- [x] modern poster + one quality
+- [x] modern poster + multiple qualities
+- [x] legacy poster + quality
+- [x] all four legacy title-label variants
+- [x] optional `#طلب_المتابعين`
+- [x] poster with no quality -> orphan
+- [x] quality without poster -> ignored
+- [x] `&` vs `and`
+- [x] punctuation/colon differences
+- [x] cross-language poster/video title with contiguous sequence
+- [x] conflicting year quality is not blindly accepted
+- [x] duplicate quality deterministically keeps newest
+- [x] new poster closes previous group
+- [x] unrelated/noise handling
+- [x] repeated parsing returns same result
 
 ### Foundation
 
-- [ ] settings reject missing/invalid secret configuration cleanly
-- [ ] models import successfully
-- [ ] FastAPI app imports
-- [ ] health endpoint returns expected payload
-- [ ] migration metadata matches model intent at review level
+- [x] settings reject missing/invalid secret configuration cleanly
+- [x] models import successfully
+- [x] FastAPI app imports
+- [x] health endpoint returns expected payload
+- [x] migration metadata matches model intent at review level
 
 ### Quality gates
 
-- [ ] `ruff check .`
-- [ ] `pytest`
-- [ ] `python -m compileall src tests`
-- [ ] no committed secret/session artifacts
+- [x] `ruff check .`
+- [x] `pytest`
+- [x] `python -m compileall src tests`
+- [x] no committed secret/session artifacts
 
 ## Failure/recovery
 
@@ -295,25 +295,69 @@ Record findings and fixes in this plan before completion.
 
 ## Acceptance criteria
 
-- [ ] package installs/imports cleanly
-- [ ] parser meets Plan 0002 behavior
-- [ ] all required tests pass
-- [ ] lint/compile checks pass
-- [ ] no Redis/task queue/microservice added without need
-- [ ] database uniqueness supports future idempotent indexing
-- [ ] no secrets committed
-- [ ] two reviews completed and recorded
-- [ ] project documentation updated
-- [ ] exact next step documented
+- [x] package installs/imports cleanly
+- [x] parser meets Plan 0002 behavior
+- [x] all required tests pass
+- [x] lint/compile checks pass
+- [x] no Redis/task queue/microservice added without need
+- [x] database uniqueness supports future idempotent indexing
+- [x] no secrets committed
+- [x] two reviews completed and recorded
+- [x] project documentation updated
+- [x] exact next step documented
 
 ## Progress notes
 
-### 2026-09-20
+### 2026-09-20 — implementation
 
 - Plan created before implementation.
-- Stack selected to balance reliability and simplicity.
-- No application code existed before this plan.
+- Selected Python 3.12 + aiogram 3 + FastAPI + PostgreSQL + SQLAlchemy async + Alembic.
+- Deliberately did not add Redis, Celery, Kafka/RabbitMQ, or a microservice split.
+- Added package/config/database/migration/FastAPI foundations.
+- Implemented the sequence-first modern + legacy archive parser.
+- Added CI with a real PostgreSQL 16 service.
+
+### 2026-09-20 — review #1: correctness
+
+Findings and fixes:
+
+- Ruff found import/order/unused-import issues; all were corrected.
+- Poster year extraction initially had a fallback that could accidentally pick a year from story text; removed that unsafe fallback.
+- Database session helper was made an explicit async context manager.
+- Caption processing was bounded.
+- Modern field labels with leading bullets/hyphens (for example `-الفيلم:`) were added based on the owner's real example.
+- Underscores are normalized as title separators.
+- The shared `الفيلم` label was disambiguated so a legacy post without `#طلب_المتابعين` is not automatically mislabeled as modern.
+- Duplicate quality handling and conflicting-year behavior were covered by tests.
+
+### 2026-09-20 — review #2: performance / complexity
+
+Findings and fixes:
+
+- Removed a full `sorted(...)` copy from the parser hot path.
+- Parser now consumes an already ordered iterable in one pass: O(n) time for grouping and no forced full-input copy.
+- Out-of-order message input fails explicitly instead of being silently rearranged.
+- Kept title similarity local to quality candidates only.
+- Kept caption processing bounded and regexes simple.
+- No extra task queue/cache/search dependency was added prematurely.
+- PostgreSQL uniqueness constraints are used as the foundation for future idempotency rather than in-memory locks/sleeps.
+
+### 2026-09-20 — final verification
+
+GitHub Actions verified:
+
+- Ruff: **all checks passed**
+- pytest: **31 passed**
+- PostgreSQL/Alembic: **upgrade → downgrade → upgrade passed**
+- Python compileall: **passed**
+- CI run used PostgreSQL 16
+
+Two warnings were emitted from FastAPI/Starlette test dependencies (deprecation notices inside installed packages), not from CineGate application code.
 
 ## Completion summary
 
-Pending.
+Plan 0003 is complete.
+
+Implemented a small production-oriented foundation plus a deterministic archive parser without unnecessary infrastructure.
+
+**Next exact step:** create Plan 0004 before code for Telegram webhook/bootstrap + durable real-time Archive Channel indexing into PostgreSQL. The plan must cover rapid/duplicate channel updates, transaction idempotency, persistence of movie groups/qualities, owner indexing notifications, and safe startup/shutdown.
