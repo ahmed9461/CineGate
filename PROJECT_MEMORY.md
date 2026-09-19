@@ -1,6 +1,6 @@
 # CineGate Project Memory
 
-**Last updated:** 2026-09-19  
+**Last updated:** 2026-09-20  
 **Purpose:** Durable source of project context so work can resume without relying on chat history.
 
 ---
@@ -346,16 +346,57 @@ See `AGENTS.md`.
 
 ---
 
-## 13. Pending decisions / information
+## 13. Implemented technical foundation
+
+Plan 0003 established the application foundation.
+
+Confirmed stack:
+
+- Python 3.12
+- aiogram 3.x for Telegram
+- FastAPI + Uvicorn for HTTP/webhook/Mini App server surfaces
+- PostgreSQL as persistent database
+- SQLAlchemy 2 async ORM
+- asyncpg driver
+- Alembic migrations
+- pytest / pytest-asyncio
+- Ruff
+
+Architecture remains one deployable application codebase separated by internal modules. Redis, Celery, Kafka/RabbitMQ, and a microservice split are intentionally **not** part of the current architecture because they are not yet required.
+
+Implemented persistence foundation includes:
+
+- `movies`
+- `movie_qualities`
+- `app_settings`
+- `message_templates`
+
+Database uniqueness constraints are deliberately used as part of future idempotency for archive indexing.
+
+The archive parser is implemented as pure business logic and consumes already ordered archive messages in one pass. It does not sort/copy the full input internally. Out-of-order input is rejected explicitly.
+
+CI verifies:
+
+- Ruff
+- pytest
+- a real PostgreSQL 16 Alembic upgrade/downgrade/upgrade round-trip
+- Python compileall
+
+Last verified result for the completed foundation phase: **31 tests passed**.
+
+See `plans/0003-application-foundation-and-parser.md`.
+
+---
+
+## 14. Pending decisions / information
 
 Do not guess these:
 
 1. Rewarded-ad network/provider.
-2. Final application technology stack and deployment topology.
-3. Final database choice.
-4. Initial-import UserBot library/implementation.
-5. Final owner/admin menu layout.
-6. Exact Telegram Bot API/library versions.
-7. Real-time archive edit/delete reconciliation behavior.
+2. Production deployment topology/host.
+3. Initial-import UserBot library/implementation.
+4. Final owner/admin menu layout.
+5. Exact Telegram Bot API/client feature versions for rich-message capabilities.
+6. Real-time archive edit/delete reconciliation behavior.
 
 These should be resolved through explicit plans and recorded in `docs/DECISIONS.md`.
