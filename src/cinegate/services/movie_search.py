@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import Float, cast, exists, select
+from sqlalchemy import exists, select
 
 from cinegate.db.models import Movie, MovieQuality
 from cinegate.db.session import Database
@@ -26,7 +26,7 @@ _QUALITY_ORDER = {
 
 
 class MovieSearchService:
-    """Bounded PostgreSQL trigram search for indexed movies."""
+    """Bounded PostgreSQL trigram search across canonical and quality titles."""
 
     def __init__(self, database: Database) -> None:
         self._database = database
@@ -56,19 +56,17 @@ class MovieSearchService:
             )
             candidate_limit = min(max(result_limit * 5, 20), _MAX_CANDIDATES)
 
-            distance = cast(
-                Movie.normalized_title.op("<->")(normalized),
-                Float,
-            ).label("distance")
-
-            rows = (
+            canonical_distance = Movie.normalized_title.op("<->")(normalized).label(
+                "distance"
+            )
+            canonical_rows = (
                 await session.execute(
                     select(
                         Movie.id,
                         Movie.display_title,
-                        Movie.normalized_title,
                         Movie.year,
-                        distance,
+                        Movie.normalized_title.label("matched_title"),
+                        canonical_distance,
                     )
                     .where(
                         Movie.status == "indexed",
@@ -78,17 +76,47 @@ class MovieSearchService:
                             )
                         ),
                     )
-                    .order_by(distance, Movie.id)
+                    .order_by(canonical_distance, Movie.id)
                     .limit(candidate_limit)
                 )
             ).all()
 
-        ranked: list[tuple[tuple, MovieSearchResult]] = []
-        for row in rows:
+            alias_distance = MovieQuality.normalized_title.op("<->")(normalized).label(
+                "distance"
+            )
+            alias_rows = (
+                await session.execute(
+                    select(
+                        Movie.id,
+                        Movie.display_title,
+                        Movie.year,
+                        MovieQuality.normalized_title.label("matched_title"),
+                        alias_distance,
+                    )
+                    .join(MovieQuality, MovieQuality.movie_id == Movie.id)
+                    .where(
+                        Movie.status == "indexed",
+                        MovieQuality.normalized_title.is_not(None),
+                    )
+                    .order_by(alias_distance, Movie.id, MovieQuality.id)
+                    .limit(candidate_limit)
+                )
+            ).all()
+
+        best_by_movie: dict[
+            int,
+            tuple[tuple[int, int, float, str, int], MovieSearchResult],
+        ] = {}
+
+        for row in (*canonical_rows, *alias_rows):
+            matched_title = row.matched_title
+            if not matched_title:
+                continue
+
             similarity = max(0.0, min(1.0, 1.0 - float(row.distance)))
             category = _match_category(
                 query=normalized,
-                candidate=row.normalized_title,
+                candidate=matched_title,
                 similarity=similarity,
                 threshold=threshold,
             )
@@ -100,26 +128,25 @@ class MovieSearchService:
                 if requested_year is None or row.year == requested_year
                 else 1
             )
+            rank = (
+                category,
+                year_penalty,
+                -similarity,
+                row.display_title.casefold(),
+                row.id,
+            )
             result = MovieSearchResult(
                 movie_id=row.id,
                 display_title=row.display_title,
                 year=row.year,
                 score=similarity,
             )
-            ranked.append(
-                (
-                    (
-                        category,
-                        year_penalty,
-                        -similarity,
-                        row.display_title.casefold(),
-                        row.id,
-                    ),
-                    result,
-                )
-            )
 
-        ranked.sort(key=lambda item: item[0])
+            previous = best_by_movie.get(row.id)
+            if previous is None or rank < previous[0]:
+                best_by_movie[row.id] = (rank, result)
+
+        ranked = sorted(best_by_movie.values(), key=lambda item: item[0])
         return tuple(result for _, result in ranked[:result_limit])
 
     async def get_results_by_ids(
