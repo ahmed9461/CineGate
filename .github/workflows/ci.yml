@@ -47,12 +47,14 @@ jobs:
       - name: Ruff
         run: ruff check .
 
+      - name: Apply migrations
+        run: alembic upgrade head
+
       - name: Tests
         run: pytest -q
 
-      - name: Migration round trip
+      - name: Migration rollback and restore
         run: |
-          alembic upgrade head
           alembic downgrade base
           alembic upgrade head
 
