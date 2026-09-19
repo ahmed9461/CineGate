@@ -6,7 +6,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from cinegate.db.models import Movie, MovieQuality
 from cinegate.db.session import Database
-from cinegate.domain.archive import ArchiveMessage, GroupStatus, MediaKind
+from cinegate.domain.archive import (
+    ArchiveMessage,
+    GroupStatus,
+    MediaKind,
+    ParsedMovieGroup,
+)
 from cinegate.domain.indexing import ArchiveIndexResult, IndexAction
 from cinegate.repositories.settings import SettingsRepository
 from cinegate.services.archive_parser import ArchiveParser
@@ -27,39 +32,39 @@ class ArchiveIndexService:
         message: ArchiveMessage,
     ) -> ArchiveIndexResult:
         async with self._database.session() as session, session.begin():
-                configured_channel_id = await SettingsRepository(session).get_int(
-                    "archive_channel_id"
-                )
-                if configured_channel_id is None or configured_channel_id != channel_id:
-                    return ArchiveIndexResult(IndexAction.IGNORED)
-
-                if message.media_kind is MediaKind.PHOTO:
-                    parsed = self._parser.parse([message])
-                    if not parsed:
-                        return ArchiveIndexResult(IndexAction.IGNORED)
-                    return await self._upsert_poster(
-                        session=session,
-                        channel_id=channel_id,
-                        parsed_group=parsed[0],
-                    )
-
-                if message.media_kind in {MediaKind.VIDEO, MediaKind.DOCUMENT}:
-                    if extract_quality(message.caption) is None:
-                        return ArchiveIndexResult(IndexAction.IGNORED)
-                    return await self._upsert_quality(
-                        session=session,
-                        channel_id=channel_id,
-                        message=message,
-                    )
-
+            configured_channel_id = await SettingsRepository(session).get_int(
+                "archive_channel_id"
+            )
+            if configured_channel_id is None or configured_channel_id != channel_id:
                 return ArchiveIndexResult(IndexAction.IGNORED)
+
+            if message.media_kind is MediaKind.PHOTO:
+                parsed = self._parser.parse([message])
+                if not parsed:
+                    return ArchiveIndexResult(IndexAction.IGNORED)
+                return await self._upsert_poster(
+                    session=session,
+                    channel_id=channel_id,
+                    parsed_group=parsed[0],
+                )
+
+            if message.media_kind in {MediaKind.VIDEO, MediaKind.DOCUMENT}:
+                if extract_quality(message.caption) is None:
+                    return ArchiveIndexResult(IndexAction.IGNORED)
+                return await self._upsert_quality(
+                    session=session,
+                    channel_id=channel_id,
+                    message=message,
+                )
+
+            return ArchiveIndexResult(IndexAction.IGNORED)
 
     async def _upsert_poster(
         self,
         *,
         session: AsyncSession,
         channel_id: int,
-        parsed_group,
+        parsed_group: ParsedMovieGroup,
     ) -> ArchiveIndexResult:
         previous = await session.scalar(
             select(Movie)
@@ -102,6 +107,7 @@ class ArchiveIndexService:
             Movie.id,
             Movie.display_title,
             Movie.owner_notification_message_id,
+            Movie.owner_notification_quality_count,
         )
 
         row = (await session.execute(statement)).one()
@@ -113,6 +119,7 @@ class ArchiveIndexService:
             display_title=row.display_title,
             quality_count=count,
             owner_notification_message_id=row.owner_notification_message_id,
+            owner_notification_quality_count=row.owner_notification_quality_count,
         )
 
     async def _upsert_quality(
@@ -146,18 +153,17 @@ class ArchiveIndexService:
 
         parsed_group = parsed_groups[0]
         if parsed_group.status is GroupStatus.AMBIGUOUS:
-            return ArchiveIndexResult(
+            return await self._result_for_movie(
+                session=session,
+                movie=movie,
                 action=IndexAction.AMBIGUOUS,
-                movie_id=movie.id,
-                display_title=movie.display_title,
-                owner_notification_message_id=movie.owner_notification_message_id,
                 diagnostic="quality_candidate_ambiguous",
             )
         if not parsed_group.qualities:
-            return ArchiveIndexResult(
+            return await self._result_for_movie(
+                session=session,
+                movie=movie,
                 action=IndexAction.IGNORED,
-                movie_id=movie.id,
-                display_title=movie.display_title,
             )
 
         quality = parsed_group.qualities[0]
@@ -191,14 +197,30 @@ class ArchiveIndexService:
 
         changed = (await session.execute(upsert)).scalar_one_or_none() is not None
         movie.status = "indexed"
-        count = await self._quality_count(session, movie.id)
 
-        return ArchiveIndexResult(
+        return await self._result_for_movie(
+            session=session,
+            movie=movie,
             action=IndexAction.QUALITY_UPSERTED if changed else IndexAction.DUPLICATE,
+        )
+
+    async def _result_for_movie(
+        self,
+        *,
+        session: AsyncSession,
+        movie: Movie,
+        action: IndexAction,
+        diagnostic: str | None = None,
+    ) -> ArchiveIndexResult:
+        count = await self._quality_count(session, movie.id)
+        return ArchiveIndexResult(
+            action=action,
             movie_id=movie.id,
             display_title=movie.display_title,
             quality_count=count,
             owner_notification_message_id=movie.owner_notification_message_id,
+            owner_notification_quality_count=movie.owner_notification_quality_count,
+            diagnostic=diagnostic,
         )
 
     @staticmethod
