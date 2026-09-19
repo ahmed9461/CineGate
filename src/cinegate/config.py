@@ -26,6 +26,7 @@ class SecretsSettings(BaseSettings):
     bot_token: SecretStr
     database_url: SecretStr
     webhook_secret: SecretStr
+    adsgram_callback_secret: SecretStr | None = None
 
     @field_validator("database_url")
     @classmethod
@@ -33,6 +34,21 @@ class SecretsSettings(BaseSettings):
         raw = value.get_secret_value()
         if not raw.startswith("postgresql+asyncpg://"):
             raise ValueError("database_url must use postgresql+asyncpg")
+        return value
+
+    @field_validator("adsgram_callback_secret")
+    @classmethod
+    def validate_adsgram_callback_secret(
+        cls,
+        value: SecretStr | None,
+    ) -> SecretStr | None:
+        if value is None:
+            return None
+        raw = value.get_secret_value()
+        if len(raw) < 32 or not _WEBHOOK_SECRET_RE.fullmatch(raw):
+            raise ValueError(
+                "adsgram_callback_secret must be URL-safe and at least 32 characters"
+            )
         return value
 
     @field_validator("webhook_secret")
