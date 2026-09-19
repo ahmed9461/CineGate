@@ -16,6 +16,12 @@ class FakeDispatcher:
         self.updates.append((bot, update))
 
 
+class FailingDispatcher(FakeDispatcher):
+    async def feed_update(self, bot, update) -> None:
+        await super().feed_update(bot, update)
+        raise RuntimeError("temporary handler failure")
+
+
 class FakeRuntime:
     def __init__(self) -> None:
         self.settings = SimpleNamespace(webhook_secret=SecretStr("webhook-secret"))
@@ -111,3 +117,22 @@ def test_webhook_rejects_invalid_update_shape() -> None:
 
     assert response.status_code == 400
     assert runtime.dispatcher.updates == []
+
+
+
+def test_webhook_internal_failure_is_not_falsely_acknowledged() -> None:
+    runtime = FakeRuntime()
+    runtime.dispatcher = FailingDispatcher()
+
+    with TestClient(
+        create_app(lambda: runtime),
+        raise_server_exceptions=False,
+    ) as client:
+        response = client.post(
+            "/telegram/webhook",
+            headers={"X-Telegram-Bot-Api-Secret-Token": "webhook-secret"},
+            json={"update_id": 999},
+        )
+
+    assert response.status_code == 500
+    assert len(runtime.dispatcher.updates) == 1
