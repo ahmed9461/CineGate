@@ -84,6 +84,21 @@ class SearchSessionService:
             previous_poster_message_id=previous_poster,
         )
 
+    async def get_current(
+        self,
+        *,
+        telegram_user_id: int,
+        nonce: str,
+    ) -> SearchSessionSnapshot | None:
+        async with self._database.session() as session:
+            current = await session.scalar(
+                select(UserSearchSession).where(
+                    UserSearchSession.telegram_user_id == telegram_user_id,
+                    UserSearchSession.nonce == nonce,
+                )
+            )
+            return _snapshot(current) if current is not None else None
+
     async def set_result_message(
         self,
         *,
