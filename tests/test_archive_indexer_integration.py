@@ -8,7 +8,13 @@ import pytest
 import pytest_asyncio
 from sqlalchemy import delete, func, select
 
-from cinegate.db.models import AppSetting, MessageTemplate, Movie, MovieQuality
+from cinegate.db.models import (
+    AppSetting,
+    MessageTemplate,
+    Movie,
+    MovieQuality,
+    UserSearchSession,
+)
 from cinegate.db.session import Database
 from cinegate.domain.archive import ArchiveMessage, MediaKind
 from cinegate.domain.indexing import IndexAction
@@ -22,6 +28,7 @@ ARCHIVE_CHANNEL_ID = -1001234567890
 
 async def clean_database(database: Database) -> None:
     async with database.session() as session, session.begin():
+        await session.execute(delete(UserSearchSession))
         await session.execute(delete(MovieQuality))
         await session.execute(delete(Movie))
         await session.execute(delete(AppSetting))
