@@ -4,7 +4,7 @@ CineGate is a Telegram movie-search and rewarded-delivery project backed by a pr
 
 ## Current phase
 
-The application foundation and archive parser are implemented.
+The application foundation, archive parser, secure Telegram webhook, and real-time Archive Channel indexer are implemented.
 
 Current stack:
 
@@ -29,10 +29,18 @@ The project intentionally does **not** include Redis, Celery, Kafka, or a micros
 - persistent app-settings/message-template tables
 - async SQLAlchemy session foundation
 - FastAPI health endpoint
+- secure Telegram webhook secret validation
+- aiogram runtime and Archive Channel router
+- real-time idempotent movie/quality persistence
+- DB-backed archive/owner runtime settings
+- durable owner archive notifications
+- rapid duplicate/concurrent quality safety
 - local PostgreSQL Compose service
 - CI for lint, tests, PostgreSQL migration round-trip, and Python compile checks
 
-User search, Telegram webhook routing, archive persistence, ads, movie delivery, and deletion are later planned phases.
+User search/movie-page UX, rewarded ads, movie delivery, deletion, owner control center, and historical UserBot import are later phases.
+
+> **Webhook ordering:** Until a durable global update sequencer is added, production webhook registration must use `max_connections=1`.
 
 ## Local development
 
