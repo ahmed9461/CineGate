@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import os
 from types import SimpleNamespace
 
@@ -21,10 +22,10 @@ ARCHIVE_CHANNEL_ID = -1001234567890
 
 async def clean_database(database: Database) -> None:
     async with database.session() as session, session.begin():
-            await session.execute(delete(MovieQuality))
-            await session.execute(delete(Movie))
-            await session.execute(delete(AppSetting))
-            await session.execute(delete(MessageTemplate))
+        await session.execute(delete(MovieQuality))
+        await session.execute(delete(Movie))
+        await session.execute(delete(AppSetting))
+        await session.execute(delete(MessageTemplate))
 
 
 @pytest_asyncio.fixture
@@ -32,7 +33,7 @@ async def database() -> Database:
     if not DATABASE_URL:
         pytest.skip("CINEGATE_DATABASE_URL is not configured")
 
-    database = Database(DATABASE_URL, pool_size=2, max_overflow=0)
+    database = Database(DATABASE_URL, pool_size=4, max_overflow=0)
     await clean_database(database)
     try:
         yield database
@@ -43,7 +44,7 @@ async def database() -> Database:
 
 async def set_setting(database: Database, key: str, value) -> None:
     async with database.session() as session, session.begin():
-            await SettingsRepository(session).set(key, value)
+        await SettingsRepository(session).set(key, value)
 
 
 def modern_poster(
@@ -82,14 +83,14 @@ def quality(
 @pytest.mark.asyncio
 async def test_settings_repository_missing_and_idempotent_upsert(database: Database) -> None:
     async with database.session() as session, session.begin():
-            repository = SettingsRepository(session)
-            assert await repository.get_int("archive_channel_id") is None
+        repository = SettingsRepository(session)
+        assert await repository.get_int("archive_channel_id") is None
 
-            await repository.set("archive_channel_id", ARCHIVE_CHANNEL_ID)
-            assert await repository.get_int("archive_channel_id") == ARCHIVE_CHANNEL_ID
+        await repository.set("archive_channel_id", ARCHIVE_CHANNEL_ID)
+        assert await repository.get_int("archive_channel_id") == ARCHIVE_CHANNEL_ID
 
-            await repository.set("archive_channel_id", ARCHIVE_CHANNEL_ID)
-            assert await repository.get_int("archive_channel_id") == ARCHIVE_CHANNEL_ID
+        await repository.set("archive_channel_id", ARCHIVE_CHANNEL_ID)
+        assert await repository.get_int("archive_channel_id") == ARCHIVE_CHANNEL_ID
 
 
 @pytest.mark.asyncio
@@ -137,9 +138,7 @@ async def test_poster_and_qualities_are_persisted_idempotently(database: Databas
         assert movie.status == "indexed"
 
         rows = (
-            await session.execute(
-                select(MovieQuality).order_by(MovieQuality.quality)
-            )
+            await session.execute(select(MovieQuality).order_by(MovieQuality.quality))
         ).scalars().all()
         assert len(rows) == 2
         by_quality = {row.quality: row for row in rows}
@@ -246,6 +245,61 @@ async def test_wrong_channel_and_quality_without_poster_are_ignored(
     assert no_poster.action is IndexAction.IGNORED
 
 
+@pytest.mark.asyncio
+async def test_rapid_parallel_qualities_are_serialized_per_movie(
+    database: Database,
+) -> None:
+    await set_setting(database, "archive_channel_id", ARCHIVE_CHANNEL_ID)
+    indexer = ArchiveIndexService(database)
+    await indexer.ingest(channel_id=ARCHIVE_CHANNEL_ID, message=modern_poster(100))
+
+    results = await asyncio.gather(
+        indexer.ingest(
+            channel_id=ARCHIVE_CHANNEL_ID,
+            message=quality(101, resolution="720p"),
+        ),
+        indexer.ingest(
+            channel_id=ARCHIVE_CHANNEL_ID,
+            message=quality(102, resolution="1080p"),
+        ),
+    )
+
+    assert {result.action for result in results} == {IndexAction.QUALITY_UPSERTED}
+
+    async with database.session() as session:
+        rows = (
+            await session.execute(
+                select(MovieQuality).order_by(MovieQuality.archive_message_id)
+            )
+        ).scalars().all()
+
+    assert [(row.archive_message_id, row.quality) for row in rows] == [
+        (101, "720p"),
+        (102, "1080p"),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_rapid_duplicate_quality_does_not_duplicate_row(database: Database) -> None:
+    await set_setting(database, "archive_channel_id", ARCHIVE_CHANNEL_ID)
+    indexer = ArchiveIndexService(database)
+    await indexer.ingest(channel_id=ARCHIVE_CHANNEL_ID, message=modern_poster(100))
+
+    first, second = await asyncio.gather(
+        indexer.ingest(channel_id=ARCHIVE_CHANNEL_ID, message=quality(101)),
+        indexer.ingest(channel_id=ARCHIVE_CHANNEL_ID, message=quality(101)),
+    )
+
+    assert {first.action, second.action} == {
+        IndexAction.QUALITY_UPSERTED,
+        IndexAction.DUPLICATE,
+    }
+
+    async with database.session() as session:
+        count = await session.scalar(select(func.count(MovieQuality.id)))
+    assert count == 1
+
+
 class FakeBot:
     def __init__(self) -> None:
         self.sent: list[tuple[int, str]] = []
@@ -299,7 +353,56 @@ async def test_owner_notification_is_sent_once_then_edited(database: Database) -
     )
 
     async with database.session() as session:
-        notification_id = await session.scalar(
-            select(Movie.owner_notification_message_id).where(Movie.id == first.movie_id)
-        )
-    assert notification_id == 500
+        row = (
+            await session.execute(
+                select(
+                    Movie.owner_notification_message_id,
+                    Movie.owner_notification_quality_count,
+                ).where(Movie.id == first.movie_id)
+            )
+        ).one()
+
+    assert row.owner_notification_message_id == 500
+    assert row.owner_notification_quality_count == 2
+
+
+@pytest.mark.asyncio
+async def test_duplicate_update_retries_notice_until_notification_is_recorded(
+    database: Database,
+) -> None:
+    await set_setting(database, "archive_channel_id", ARCHIVE_CHANNEL_ID)
+    await set_setting(database, "owner_chat_id", 777)
+
+    indexer = ArchiveIndexService(database)
+    await indexer.ingest(channel_id=ARCHIVE_CHANNEL_ID, message=modern_poster(100))
+
+    first = await indexer.ingest(
+        channel_id=ARCHIVE_CHANNEL_ID,
+        message=quality(101),
+    )
+    assert first.action is IndexAction.QUALITY_UPSERTED
+    assert first.should_notify_owner
+
+    # Simulate Telegram notification failure by not calling the notifier.
+    duplicate_before_notice = await indexer.ingest(
+        channel_id=ARCHIVE_CHANNEL_ID,
+        message=quality(101),
+    )
+    assert duplicate_before_notice.action is IndexAction.DUPLICATE
+    assert duplicate_before_notice.should_notify_owner
+    assert duplicate_before_notice.movie_id is not None
+
+    bot = FakeBot()
+    notifier = OwnerArchiveNotifier(database, bot)  # type: ignore[arg-type]
+    await notifier.notify_movie(duplicate_before_notice.movie_id)
+
+    duplicate_after_notice = await indexer.ingest(
+        channel_id=ARCHIVE_CHANNEL_ID,
+        message=quality(101),
+    )
+    assert duplicate_after_notice.action is IndexAction.DUPLICATE
+    assert not duplicate_after_notice.should_notify_owner
+
+    await notifier.notify_movie(duplicate_before_notice.movie_id)
+    assert len(bot.sent) == 1
+    assert bot.edited == []
