@@ -131,12 +131,54 @@ A poster with no accepted following quality media does not become searchable. Un
 
 ---
 
+## D-014 — Python async single-codebase stack
+
+**Status:** Accepted  
+**Date:** 2026-09-20
+
+CineGate uses Python 3.12 with aiogram 3 for Telegram and FastAPI/Uvicorn for HTTP surfaces. Business logic is separated into internal modules but remains one deployable application unless measured scaling needs justify a split.
+
+**Reason:** This keeps the system small and testable while matching the asynchronous Telegram/PostgreSQL workload.
+
+---
+
+## D-015 — PostgreSQL is the persistent database
+
+**Status:** Accepted  
+**Date:** 2026-09-20
+
+CineGate uses PostgreSQL with SQLAlchemy 2 async, asyncpg, and Alembic migrations.
+
+Database uniqueness constraints and transactions are part of the idempotency strategy for duplicate/rapid Telegram events.
+
+---
+
+## D-016 — Do not add infrastructure without evidence
+
+**Status:** Accepted  
+**Date:** 2026-09-20
+
+Redis, Celery, Kafka/RabbitMQ, and a microservice split are not part of the current architecture.
+
+They may be added later only if a concrete load, durability, or coordination requirement cannot be handled cleanly by the existing application + PostgreSQL design.
+
+---
+
+## D-017 — Archive parser consumes ordered messages in one pass
+
+**Status:** Accepted  
+**Date:** 2026-09-20
+
+The parser requires ascending Telegram message IDs and processes them in O(n) grouping time without sorting/copying the entire input. Out-of-order input fails explicitly.
+
+**Reason:** Archive retrieval already has an ordering contract; re-sorting every import batch would add unnecessary memory and CPU work and could hide caller bugs.
+
+---
+
 # Pending decisions
 
-- Backend/bot framework
-- Database
 - Ad provider
 - UserBot implementation library
 - Hosting/deployment model
-- Telegram Bot API/client library versions
+- Telegram Bot API/client feature versions
 - Real-time archive edit/delete reconciliation behavior
