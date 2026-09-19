@@ -388,7 +388,45 @@ See `plans/0003-application-foundation-and-parser.md`.
 
 ---
 
-## 14. Pending decisions / information
+## 14. Implemented Telegram/archive ingestion
+
+Plan 0004 completed the live Telegram transport and Archive Channel persistence layer.
+
+Implemented:
+
+- FastAPI `POST /telegram/webhook`
+- constant-time validation of `X-Telegram-Bot-Api-Secret-Token`
+- aiogram Dispatcher lifecycle inside the application runtime
+- Archive Channel photo/video/video-document adaptation without downloading media
+- DB-backed `archive_channel_id` and `owner_chat_id` runtime settings
+- idempotent poster/quality persistence
+- PostgreSQL row locking for rapid concurrent qualities of the same movie
+- deterministic replacement of a newer duplicate resolution
+- pending → indexed/orphan transitions
+- owner indexing notification that sends once then edits the same message as quality count grows
+- durable owner-notification progress so a duplicate webhook can retry a notification that failed after indexing already committed
+- bounded convergence for concurrent owner-notification races
+- webhook failures remain non-2xx when work must be retried
+
+Current CI verification after Plan 0004:
+
+- Ruff passed
+- **52 tests passed**
+- PostgreSQL 16 migrations `0001 → 0002 → 0003`
+- full downgrade to base and upgrade back to head passed
+- compileall passed
+
+Important webhook sequencing rule:
+
+Telegram documents that webhook updates can need sequence restoration using `update_id`, and webhook delivery can use multiple simultaneous connections. CineGate does not yet have a durable global update sequencer. Therefore initial production webhook registration must use **`max_connections=1`**. Do not increase it until a dedicated sequencing plan is implemented and tested.
+
+This restriction applies to Telegram webhook delivery concurrency, not database connection capacity.
+
+See `plans/0004-telegram-webhook-and-archive-indexer.md`.
+
+---
+
+## 15. Pending decisions / information
 
 Do not guess these:
 
