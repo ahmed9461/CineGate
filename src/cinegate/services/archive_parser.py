@@ -82,8 +82,12 @@ class ArchiveParser:
     def parse(self, messages: Iterable[ArchiveMessage]) -> tuple[ParsedMovieGroup, ...]:
         groups: list[ParsedMovieGroup] = []
         current: _GroupBuilder | None = None
+        previous_message_id = 0
 
-        for message in sorted(messages, key=lambda item: item.message_id):
+        for message in messages:
+            if message.message_id <= previous_message_id:
+                raise ValueError("archive messages must be ordered by ascending message_id")
+            previous_message_id = message.message_id
             poster = _detect_poster(message)
             if poster is not None:
                 if current is not None:
