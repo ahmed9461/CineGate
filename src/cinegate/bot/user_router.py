@@ -108,6 +108,11 @@ def build_user_router(
         bot: Bot,
     ) -> None:
         user_id = callback.from_user.id
+        view = await search.get_movie_view(callback_data.movie_id)
+        if view is None:
+            await _safe_callback_answer(callback, MOVIE_UNAVAILABLE, show_alert=True)
+            return
+
         claimed = await sessions.claim_movie(
             telegram_user_id=user_id,
             nonce=callback_data.nonce,
@@ -115,16 +120,6 @@ def build_user_router(
         )
         if claimed is None:
             await _safe_callback_answer(callback, STALE_SEARCH)
-            return
-
-        view = await search.get_movie_view(callback_data.movie_id)
-        if view is None:
-            await sessions.reset_opening(
-                telegram_user_id=user_id,
-                nonce=callback_data.nonce,
-                movie_id=callback_data.movie_id,
-            )
-            await _safe_callback_answer(callback, MOVIE_UNAVAILABLE, show_alert=True)
             return
 
         await _safe_callback_answer(callback)
@@ -182,6 +177,23 @@ def build_user_router(
         bot: Bot,
     ) -> None:
         user_id = callback.from_user.id
+        current = await sessions.get_current(
+            telegram_user_id=user_id,
+            nonce=callback_data.nonce,
+        )
+        if current is None or current.state != "movie":
+            await _safe_callback_answer(callback, STALE_SEARCH)
+            return
+
+        results = await search.get_results_by_ids(current.result_movie_ids)
+        if not results:
+            await _safe_callback_answer(callback, STALE_SEARCH)
+            return
+
+        default_text = render_search_results(len(results))
+        text = await _template(database, "search_results", default_text)
+        text = text.replace("%count%", str(len(results)))
+
         claimed = await sessions.claim_back(
             telegram_user_id=user_id,
             nonce=callback_data.nonce,
@@ -193,18 +205,6 @@ def build_user_router(
         await _safe_callback_answer(callback)
 
         try:
-            results = await search.get_results_by_ids(claimed.result_movie_ids)
-            if not results:
-                await sessions.reset_returning(
-                    telegram_user_id=user_id,
-                    nonce=callback_data.nonce,
-                )
-                await bot.send_message(user_id, STALE_SEARCH)
-                return
-
-            default_text = render_search_results(len(results))
-            text = await _template(database, "search_results", default_text)
-            text = text.replace("%count%", str(len(results)))
             sent = await bot.send_message(
                 user_id,
                 text,
@@ -214,12 +214,6 @@ def build_user_router(
                 ),
             )
         except TelegramAPIError:
-            await sessions.reset_returning(
-                telegram_user_id=user_id,
-                nonce=callback_data.nonce,
-            )
-            raise
-        except Exception:
             await sessions.reset_returning(
                 telegram_user_id=user_id,
                 nonce=callback_data.nonce,
