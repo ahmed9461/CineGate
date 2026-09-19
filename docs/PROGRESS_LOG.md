@@ -217,3 +217,70 @@ Archive ingestion is implemented. End-user search/movie-page UX is next.
 ### Exact next step
 
 Create `plans/0005-search-and-movie-page.md` before implementing direct English typo-tolerant search and movie/quality UI.
+
+
+---
+
+## 2026-09-20 — Direct movie search and movie page completed
+
+### Plan
+
+- `plans/0005-search-and-movie-page.md` — completed
+
+### Implemented
+
+- direct private text search with no search button
+- PostgreSQL `pg_trgm` typo-tolerant KNN search
+- canonical poster-title and quality-caption alias indexes
+- English alias search for cross-language poster/video naming
+- release-year-aware ranking
+- safe year-only movie titles such as `1917`
+- bounded result/candidate counts
+- durable one-row-per-user search sessions
+- nonce-protected callbacks
+- rapid double-click single-winner state transitions
+- styled Telegram result/quality buttons
+- Archive Channel poster/info copy
+- available-quality-only keyboard
+- Back navigation
+- DB-editable search/no-result message bodies
+- cleanup after DB failure following Telegram send/copy
+
+### Correctness review
+
+Found and fixed:
+
+- `1917` could have been stripped as a year instead of retained as the movie title
+- English video title needed to become a local alias when poster title is another language
+- concurrent first search for the same user needed per-user DB serialization
+- stale result message writes after a newer search
+- duplicate movie-button clicks
+- DB failure after Telegram send/copy leaving orphan UI
+
+### Performance/complexity review
+
+Confirmed:
+
+- no full-catalog Python fuzzy scan
+- canonical and alias KNN queries are index-eligible
+- candidate pool bounded before application ranking
+- one durable session row per user
+- no Redis/search service/cache introduced
+- poster media never downloaded
+
+### Verification
+
+- Ruff: passed
+- pytest: **87 passed**
+- migrations 0001→0006: passed
+- full downgrade/restore: passed
+- compileall: passed
+- KNN index-eligibility checks: passed
+
+### Current stop point
+
+Pre-ad user flow is complete. Quality selection is not yet linked to reward/delivery.
+
+### Exact next step
+
+Create `plans/0006-reward-delivery-and-deletion.md` before implementing durable reward sessions, provider-neutral Mini App handoff, archive quality delivery, and timed deletion.
