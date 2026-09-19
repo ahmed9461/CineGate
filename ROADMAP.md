@@ -14,15 +14,17 @@ This roadmap is directional. Every phase requires its own detailed plan file bef
 
 ## Phase 1 — Archive format & parser specification
 
-- [ ] Receive real archive/original-channel post samples
-- [ ] Define poster detection
-- [ ] Define movie boundary/group detection
-- [ ] Define quality extraction
-- [ ] Define title/year extraction
-- [ ] Define incomplete/ambiguous group handling
-- [ ] Define duplicate handling
-- [ ] Define edit/delete behavior
-- [ ] Write parser fixtures/tests before production indexing
+- [x] Receive real archive/original-channel post samples
+- [x] Define poster detection
+- [x] Define movie boundary/group detection
+- [x] Define quality extraction
+- [x] Define title/year extraction and normalization direction
+- [x] Define incomplete/ambiguous group handling
+- [x] Define duplicate/idempotency requirements
+- [ ] Define real-time edit/delete reconciliation behavior
+- [ ] Implement parser fixtures/tests before production indexing
+
+**Specification:** `plans/0002-archive-format-and-parser.md`
 
 ## Phase 2 — Application foundation
 
