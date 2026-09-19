@@ -263,3 +263,20 @@ def test_legacy_alfilm_without_follower_hashtag_is_classified_legacy() -> None:
 
     assert group.status is GroupStatus.INDEXED
     assert group.parser_style is ParserStyle.LEGACY
+
+
+
+def test_year_named_movie_uses_separate_release_year() -> None:
+    group = ArchiveParser().parse(
+        [
+            modern_poster(title="1917", year=2019),
+            video(101, "1917 2019 #720p"),
+        ]
+    )[0]
+
+    assert group.status is GroupStatus.INDEXED
+    assert group.display_title == "1917"
+    assert group.normalized_title == "1917"
+    assert group.year == 2019
+    assert group.qualities[0].normalized_title == "1917"
+    assert group.qualities[0].year == 2019
