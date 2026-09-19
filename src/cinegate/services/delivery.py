@@ -255,6 +255,41 @@ class DeliveryService:
                 delete_at=delete_at,
             )
 
+    async def recover_stale_sends(self, *, stale_seconds: int = 300) -> int:
+        if stale_seconds <= 0:
+            raise ValueError("stale_seconds must be positive")
+
+        cutoff = _utcnow() - timedelta(seconds=stale_seconds)
+        async with self._database.session() as session, session.begin():
+            deliveries = (
+                await session.execute(
+                    select(Delivery)
+                    .where(
+                        Delivery.status == "sending",
+                        Delivery.send_started_at.is_not(None),
+                        Delivery.send_started_at <= cutoff,
+                    )
+                    .with_for_update(skip_locked=True)
+                )
+            ).scalars().all()
+
+            recovered = 0
+            for delivery in deliveries:
+                reward = await session.scalar(
+                    select(RewardSession)
+                    .where(RewardSession.id == delivery.reward_session_id)
+                    .with_for_update()
+                )
+                delivery.status = "pending"
+                delivery.send_started_at = None
+                delivery.attempts += 1
+                delivery.last_error = "recovered stale sending state"
+                if reward is not None and reward.status == "delivering":
+                    reward.status = "rewarded"
+                    reward.delivery_started_at = None
+                recovered += 1
+            return recovered
+
     async def recover_stale_deletions(self, *, stale_seconds: int = 300) -> int:
         if stale_seconds <= 0:
             raise ValueError("stale_seconds must be positive")
