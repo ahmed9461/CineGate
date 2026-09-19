@@ -175,6 +175,32 @@ The parser requires ascending Telegram message IDs and processes them in O(n) gr
 
 ---
 
+## D-018 — Initial webhook delivery concurrency stays at one
+
+**Status:** Accepted  
+**Date:** 2026-09-20
+
+Initial production webhook registration must use `max_connections=1`.
+
+Telegram documents that `update_id` can be used to restore webhook update order if updates arrive out of order, and supports multiple simultaneous webhook connections. CineGate's archive grouping is sequence-sensitive and does not yet have a durable global update sequencer.
+
+**Reason:** Preserve deterministic archive ordering without prematurely adding a queue. Webhook delivery concurrency may only be raised after a dedicated sequencing implementation is planned and tested.
+
+---
+
+## D-019 — Archive indexing commits before owner notification
+
+**Status:** Accepted  
+**Date:** 2026-09-20
+
+Archive persistence is the authoritative operation. Telegram owner notification is best-effort after the database transaction commits.
+
+The database stores how many qualities the owner notification has successfully reflected. Duplicate webhook delivery can therefore retry an incomplete notification without duplicating movie/quality records.
+
+**Reason:** A Telegram notification outage must never roll back or lose successfully indexed archive content.
+
+---
+
 # Pending decisions
 
 - Ad provider
@@ -182,3 +208,4 @@ The parser requires ascending Telegram message IDs and processes them in O(n) gr
 - Hosting/deployment model
 - Telegram Bot API/client feature versions
 - Real-time archive edit/delete reconciliation behavior
+- Durable global webhook sequencer before raising `max_connections` above 1
