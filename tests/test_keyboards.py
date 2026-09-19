@@ -23,7 +23,7 @@ def test_search_result_buttons_use_primary_style_and_compact_callbacks() -> None
     assert len(keyboard.inline_keyboard) == 2
     for row in keyboard.inline_keyboard:
         button = row[0]
-        assert button.style is ButtonStyle.PRIMARY
+        assert button.style == ButtonStyle.PRIMARY.value
         assert button.callback_data is not None
         assert len(button.callback_data.encode("utf-8")) <= 64
 
@@ -41,7 +41,7 @@ def test_quality_keyboard_renders_only_supplied_qualities_in_stable_rows() -> No
 
     for row in keyboard.inline_keyboard[:-1]:
         for button in row:
-            assert button.style is ButtonStyle.PRIMARY
+            assert button.style == ButtonStyle.PRIMARY.value
             assert button.callback_data is not None
             assert len(button.callback_data.encode("utf-8")) <= 64
 
