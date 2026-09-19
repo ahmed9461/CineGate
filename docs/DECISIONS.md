@@ -201,6 +201,41 @@ The database stores how many qualities the owner notification has successfully r
 
 ---
 
+## D-020 — PostgreSQL pg_trgm is the movie search engine
+
+**Status:** Accepted  
+**Date:** 2026-09-20
+
+CineGate uses bounded PostgreSQL trigram KNN search rather than scanning the catalog in Python or adding a separate search service.
+
+Both canonical poster titles and normalized titles extracted from quality captions are indexed. Quality-caption titles act as local aliases when the poster and video use different languages/names.
+
+**Reason:** It keeps typo-tolerant search fast, local, and consistent with the archive-only content source.
+
+---
+
+## D-021 — One durable current search session per user
+
+**Status:** Accepted  
+**Date:** 2026-09-20
+
+Each Telegram user has at most one `user_search_sessions` row. A new search replaces its nonce/results/state.
+
+Movie and Back callbacks must match the current nonce and stored result IDs. Temporary states prevent rapid double-clicks from producing duplicate poster/result UI.
+
+**Reason:** Provides stale-callback and rapid-click safety without an unbounded session-history table or external cache.
+
+---
+
+## D-022 — Year-only movie titles must remain titles
+
+**Status:** Accepted  
+**Date:** 2026-09-20
+
+A four-digit title such as `1917` is not automatically stripped as release metadata. A trailing year is treated as release metadata only when meaningful title content remains.
+
+---
+
 # Pending decisions
 
 - Ad provider
