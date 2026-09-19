@@ -1,0 +1,167 @@
+# CineGate Product Specification
+
+**Status:** Initial confirmed specification.  
+**Last updated:** 2026-09-19
+
+## Goal
+
+Provide a Telegram experience where a user searches an indexed movie catalog, selects an available quality, completes one rewarded advertisement, and receives that movie quality temporarily.
+
+## Primary user journey
+
+### Search
+
+- User sends an English movie title directly into the bot chat.
+- Bot searches local indexed archive data.
+- Bot should tolerate reasonable misspellings.
+- Bot returns closest relevant candidates as buttons when needed.
+- Search UI should avoid unnecessary modes/buttons.
+
+### No results
+
+No-result copy is configurable by the owner. Current desired default:
+
+> عذرا لم أجد نتائج بحث ‼️
+>
+> هذا يعني اما الفيلم غير متوفر في ذاكرتي او ان نص البحث غير دقيق ، حاول كتابة الاسم الصحيح و اذا مازالت تظهر هذه الرسالة ف هذا يعني ان الفيلم غير متوفر.
+
+### Movie selection
+
+After selecting a result:
+
+- previous search-result message can be removed/replaced for a clean flow
+- poster + movie information are copied from the Telegram Archive Channel
+- only qualities actually indexed for that movie are shown
+
+Example:
+
+```
+[480p] [720p]
+[1080p]
+[رجوع]
+```
+
+### Quality selection
+
+After choosing a quality:
+
+- bot creates a reward request bound to that exact user/movie/quality
+- user sees an explanation that one short ad must be completed
+- button opens rewarded-ad Mini App flow
+
+### Reward
+
+- opening the ad page alone is insufficient
+- verified reward/completion is required
+- duplicate callbacks must be idempotent
+- reward cannot unlock unrelated content
+
+### Delivery
+
+After verified reward:
+
+- bot copies the requested archive quality to the user
+- delivered message uses the owner-configurable delivery-caption template
+- delivery is temporary
+
+### Auto-deletion
+
+- owner configures duration from inside the bot
+- duration is inserted through `%time%`
+- only the delivered movie/file message is deleted automatically
+- poster/info is not deleted
+- deletion schedule survives service restarts
+- overdue pending deletions are reconciled after restart
+
+## Content architecture
+
+### Source of truth
+
+A dedicated private Telegram Archive Channel is the source for movie media and poster/information posts.
+
+No external movie catalog lookup is required for normal operation.
+
+### Initial archive population
+
+Owner temporarily disables content-forwarding restriction in the original private channel, uses a UserBot for the one-time historical transfer to the Archive Channel, then can re-enable protection.
+
+### Ongoing archive population
+
+Owner sends future movie posts to the Archive Channel as part of normal publishing.
+
+CineGate indexes them and reports successful saved groups to the owner.
+
+## Owner experience
+
+Owner/admin functionality should make routine changes possible without code edits/restarts.
+
+Editable categories include:
+
+- messages/templates
+- deletion duration
+- search behavior where safe
+- result count
+- ad behavior that is non-secret
+- archive notifications
+- buttons/presentation
+- other runtime settings
+
+## Template system
+
+At minimum support:
+
+- `%movie%`
+- `%year%`
+- `%quality%`
+- `%time%`
+
+Templates should preserve supported Telegram formatting.
+
+## Telegram UX
+
+Design for:
+
+- Telegram entities/formatting
+- Arabic RTL when needed
+- Telegram rich-message capabilities where beneficial
+- supported modern button styling
+- clean navigation
+- centralized rendering logic
+
+## Security / abuse
+
+- never execute user search input
+- parameterized DB access
+- length limits
+- rate limiting
+- safe Telegram init data validation for Mini App identity
+- reward replay protection
+- no secrets in DB-exposed admin messages
+- no UserBot session material in Git
+
+## Reliability
+
+Must handle safely:
+
+- duplicate archive events
+- archive edits
+- malformed/incomplete movie groups
+- duplicate reward callbacks
+- reward success + delivery failure
+- bot/backend restarts
+- deletion worker restarts
+- stale Telegram message references
+- Telegram API failures
+- ad provider failures
+- database failures
+
+## Not finalized
+
+- exact archive parser rules
+- ad network
+- stack
+- database
+- deployment
+- Telegram libraries/API versions
+
+These must be decided through task plans and recorded in the decision log.
