@@ -16,6 +16,7 @@ from cinegate.domain.archive import (
 from cinegate.services.text import (
     clean_display_title,
     extract_quality,
+    extract_release_year,
     extract_year,
     normalize_title,
     remove_quality_token,
@@ -224,7 +225,11 @@ def _detect_quality(message: ArchiveMessage) -> _QualityCandidate | None:
 
     raw_title = labeled_title or _extract_freeform_quality_title(caption)
     normalized = normalize_title(raw_title) if raw_title else None
-    year = extract_year(raw_title) or extract_year(caption)
+    year = (
+        extract_release_year(labeled_title)
+        if labeled_title is not None
+        else extract_release_year(caption)
+    )
 
     return _QualityCandidate(
         message=message,
