@@ -20,8 +20,7 @@ ARCHIVE_CHANNEL_ID = -1001234567890
 
 
 async def clean_database(database: Database) -> None:
-    async with database.session() as session:
-        async with session.begin():
+    async with database.session() as session, session.begin():
             await session.execute(delete(MovieQuality))
             await session.execute(delete(Movie))
             await session.execute(delete(AppSetting))
@@ -43,8 +42,7 @@ async def database() -> Database:
 
 
 async def set_setting(database: Database, key: str, value) -> None:
-    async with database.session() as session:
-        async with session.begin():
+    async with database.session() as session, session.begin():
             await SettingsRepository(session).set(key, value)
 
 
@@ -83,8 +81,7 @@ def quality(
 
 @pytest.mark.asyncio
 async def test_settings_repository_missing_and_idempotent_upsert(database: Database) -> None:
-    async with database.session() as session:
-        async with session.begin():
+    async with database.session() as session, session.begin():
             repository = SettingsRepository(session)
             assert await repository.get_int("archive_channel_id") is None
 
