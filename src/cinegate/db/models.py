@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from uuid import UUID, uuid4
 
 from sqlalchemy import (
     BigInteger,
@@ -8,11 +9,14 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
+    Integer,
     SmallInteger,
     String,
     Text,
     UniqueConstraint,
+    Uuid,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -138,6 +142,115 @@ class UserSearchSession(Base):
     )
     result_message_id: Mapped[int | None] = mapped_column(BigInteger)
     poster_message_id: Mapped[int | None] = mapped_column(BigInteger)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+
+class RewardSession(Base):
+    __tablename__ = "reward_sessions"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ("
+            "'pending', 'client_completed', 'provider_confirmed', "
+            "'rewarded', 'delivering', 'delivered', 'expired'"
+            ")",
+            name="ck_reward_sessions_status",
+        ),
+        Index(
+            "uq_reward_sessions_active_user",
+            "telegram_user_id",
+            unique=True,
+            postgresql_where=text(
+                "status IN ("
+                "'pending', 'client_completed', 'provider_confirmed', "
+                "'rewarded', 'delivering'"
+                ")"
+            ),
+        ),
+        Index("ix_reward_sessions_user_created", "telegram_user_id", "created_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        primary_key=True,
+        default=uuid4,
+    )
+    telegram_user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    movie_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("movies.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    movie_quality_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("movie_qualities.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    quality: Mapped[str] = mapped_column(String(16), nullable=False)
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default="pending")
+    prompt_message_id: Mapped[int | None] = mapped_column(BigInteger)
+    prompt_claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    client_completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    provider_confirmed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True)
+    )
+    rewarded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    delivery_started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True)
+    )
+    delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class Delivery(Base):
+    __tablename__ = "deliveries"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('pending', 'sending', 'sent', 'deleting', 'deleted')",
+            name="ck_deliveries_status",
+        ),
+        UniqueConstraint("reward_session_id", name="uq_deliveries_reward_session"),
+        Index("ix_deliveries_due", "status", "next_attempt_at"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    reward_session_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("reward_sessions.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    telegram_user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    movie_quality_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("movie_qualities.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")
+    telegram_message_id: Mapped[int | None] = mapped_column(BigInteger)
+    send_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    delete_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    delete_started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True)
+    )
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    last_error: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
