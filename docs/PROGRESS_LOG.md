@@ -87,3 +87,68 @@ No production application code was started.
 ### Exact next step
 
 Create a new plan before implementation that selects the application stack/database, defines schema/service boundaries, and converts Plan 0002 cases into executable parser fixtures/tests.
+
+
+---
+
+## 2026-09-20 — Application foundation and archive parser implemented
+
+### Plan
+
+- `plans/0003-application-foundation-and-parser.md` — completed
+
+### Implemented
+
+- Python 3.12 package structure
+- aiogram 3 dependency for Telegram
+- FastAPI/Uvicorn HTTP foundation
+- PostgreSQL + SQLAlchemy async + asyncpg
+- Alembic migration environment and initial schema
+- local PostgreSQL Docker Compose
+- secrets-only environment settings layer
+- archive domain datatypes
+- modern + legacy archive parser
+- title/year/quality normalization
+- orphan/ambiguous group outcomes
+- deterministic duplicate-quality behavior
+- app settings and Telegram message-template persistence models
+- FastAPI `/healthz`
+- GitHub Actions CI
+
+### Correctness review
+
+The first review caught and fixed:
+
+- lint/import issues
+- an unsafe poster-year fallback that could read a year from story text
+- an imprecise async session helper
+- missing support for bulleted field labels such as `-الفيلم:`
+- underscore title separators
+- ambiguous `الفيلم` modern/legacy classification
+
+### Performance/complexity review
+
+The second review:
+
+- removed full-input sorting/copying from the parser
+- changed archive parsing to ordered one-pass O(n) grouping
+- added explicit out-of-order input rejection
+- kept caption processing bounded
+- kept Redis/Celery/message brokers/microservices out of the architecture because no requirement currently justifies them
+
+### Verification
+
+GitHub Actions:
+
+- Ruff: passed
+- pytest: **31 passed**
+- PostgreSQL 16 + Alembic upgrade → downgrade → upgrade: passed
+- compileall: passed
+
+### Current stop point
+
+The application foundation and pure parser are complete. Telegram webhook/archive persistence is not wired yet.
+
+### Exact next step
+
+Create `plans/0004-telegram-webhook-and-archive-indexer.md` before implementing aiogram/FastAPI webhook ingestion and durable real-time Archive Channel indexing.
