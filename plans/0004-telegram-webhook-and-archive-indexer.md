@@ -1,6 +1,6 @@
 # Plan 0004 — Telegram webhook and durable Archive Channel indexer
 
-**Status:** In progress  
+**Status:** Completed  
 **Created:** 2026-09-20  
 **Last updated:** 2026-09-20
 
@@ -222,45 +222,45 @@ The notifier must be isolated from indexing correctness.
 
 ### Webhook
 
-- [ ] correct secret accepted
-- [ ] missing secret rejected
-- [ ] incorrect secret rejected
-- [ ] malformed JSON/update rejected
-- [ ] valid update dispatched once
+- [x] correct secret accepted
+- [x] missing secret rejected
+- [x] incorrect secret rejected
+- [x] malformed JSON/update rejected
+- [x] valid update dispatched once
 
 ### Adapter
 
-- [ ] photo mapping
-- [ ] video mapping
-- [ ] video-document mapping
-- [ ] unrelated document mapping
+- [x] photo mapping
+- [x] video mapping
+- [x] video-document mapping
+- [x] unrelated document mapping
 
 ### Settings repository
 
-- [ ] missing setting returns default/None
-- [ ] set/get int setting
-- [ ] upsert is idempotent
+- [x] missing setting returns default/None
+- [x] set/get int setting
+- [x] upsert is idempotent
 
 ### Archive indexer integration
 
-- [ ] modern poster persists pending
-- [ ] first quality persists and marks indexed
-- [ ] multiple qualities attach to same movie
-- [ ] duplicate webhook delivery does not duplicate movie
-- [ ] duplicate quality does not duplicate row
-- [ ] newer same-resolution quality replaces older one deterministically
-- [ ] old poster with zero qualities becomes orphan when next poster arrives
-- [ ] cross-language title quality still attaches by sequence
-- [ ] conflicting year is not persisted as accepted quality
-- [ ] unconfigured/wrong archive channel is ignored
-- [ ] quality without poster is ignored
+- [x] modern poster persists pending
+- [x] first quality persists and marks indexed
+- [x] multiple qualities attach to same movie
+- [x] duplicate webhook delivery does not duplicate movie
+- [x] duplicate quality does not duplicate row
+- [x] newer same-resolution quality replaces older one deterministically
+- [x] old poster with zero qualities becomes orphan when next poster arrives
+- [x] cross-language title quality still attaches by sequence
+- [x] conflicting year is not persisted as accepted quality
+- [x] unconfigured/wrong archive channel is ignored
+- [x] quality without poster is ignored
 
 ### Quality gates
 
-- [ ] Ruff
-- [ ] pytest
-- [ ] Alembic PostgreSQL round-trip
-- [ ] compileall
+- [x] Ruff
+- [x] pytest
+- [x] Alembic PostgreSQL round-trip
+- [x] compileall
 
 ## Review #1 — correctness
 
@@ -293,44 +293,92 @@ Do not add Redis/queue infrastructure solely “for scale” without evidence.
 
 ## Acceptance criteria
 
-- [ ] Telegram webhook endpoint is secure and test-covered
-- [ ] runtime starts/stops cleanly
-- [ ] archive channel filter comes from DB runtime settings
-- [ ] valid archive posters/qualities persist correctly
-- [ ] duplicate deliveries are idempotent
-- [ ] notification failure cannot lose indexed content
-- [ ] CI passes
-- [ ] both reviews recorded
-- [ ] docs/memory/status updated
-- [ ] next exact step documented
+- [x] Telegram webhook endpoint is secure and test-covered
+- [x] runtime starts/stops cleanly
+- [x] archive channel filter comes from DB runtime settings
+- [x] valid archive posters/qualities persist correctly
+- [x] duplicate deliveries are idempotent
+- [x] notification failure cannot lose indexed content
+- [x] CI passes
+- [x] both reviews recorded
+- [x] docs/memory/status updated
+- [x] next exact step documented
 
 ## Implementation steps
 
 - [x] 1. Create this plan before code.
-- [ ] 2. Add settings repository.
-- [ ] 3. Add archive persistence repository/indexer.
-- [ ] 4. Add notification-message field migration.
-- [ ] 5. Add Telegram message adapter.
-- [ ] 6. Add aiogram archive router.
-- [ ] 7. Add runtime/lifespan.
-- [ ] 8. Add secure FastAPI webhook.
-- [ ] 9. Add integration/unit tests.
-- [ ] 10. Adjust CI so migrations run before DB integration tests.
-- [ ] 11. Run full checks.
-- [ ] 12. Correctness review + fixes.
-- [ ] 13. Performance/complexity review + fixes.
-- [ ] 14. Final checks.
-- [ ] 15. Update repository memory/docs.
-- [ ] 16. Mark complete.
+- [x] 2. Add settings repository.
+- [x] 3. Add archive persistence repository/indexer.
+- [x] 4. Add notification-message field migration.
+- [x] 5. Add Telegram message adapter.
+- [x] 6. Add aiogram archive router.
+- [x] 7. Add runtime/lifespan.
+- [x] 8. Add secure FastAPI webhook.
+- [x] 9. Add integration/unit tests.
+- [x] 10. Adjust CI so migrations run before DB integration tests.
+- [x] 11. Run full checks.
+- [x] 12. Correctness review + fixes.
+- [x] 13. Performance/complexity review + fixes.
+- [x] 14. Final checks.
+- [x] 15. Update repository memory/docs.
+- [x] 16. Mark complete.
 
 ## Progress notes
 
-### 2026-09-20
+### 2026-09-20 — implementation
 
 - Plan created before implementation.
 - Official Telegram/aiogram webhook behavior reviewed.
-- No code for this phase existed before the plan.
+- Added secure FastAPI webhook with constant-time secret comparison.
+- Added aiogram runtime lifecycle and archive channel router.
+- Added Telegram media adapter without downloading files.
+- Added DB-backed runtime settings for `archive_channel_id` and `owner_chat_id`.
+- Added transactional, idempotent archive persistence.
+- Added owner notification state and same-message quality-count updates.
+- Added PostgreSQL migrations 0002 and 0003.
+- CI now applies migrations before integration tests and verifies rollback/restore.
+
+### 2026-09-20 — review #1: correctness
+
+Findings and fixes:
+
+- Ruff caught nested async context style issues; corrected before logic review continued.
+- Duplicate archive deliveries were explicitly verified against real PostgreSQL constraints.
+- Rapid concurrent qualities are serialized per movie with row locking and persist exactly once.
+- Rapid duplicate quality deliveries produce one row and one changed result.
+- Notification state was initially vulnerable to being lost when Telegram notification failed after successful indexing. Added durable `owner_notification_quality_count` so duplicate webhook retries still know notification work is pending.
+- Transient Telegram notification failures now propagate instead of being falsely acknowledged; permanent bad-request/forbidden notification failures are logged without corrupting indexed content.
+- Webhook internal handler failures were tested to return non-2xx so Telegram can retry.
+- A deterministic concurrent notification race test was added: one older notice is paused while a newer quality arrives, and the final canonical owner message must converge to the latest quality count.
+
+### 2026-09-20 — review #2: performance / complexity
+
+Findings and decisions:
+
+- No Redis, Celery, broker, or external queue was added.
+- Archive media is never downloaded by the webhook/indexer.
+- Per-message indexing uses short PostgreSQL transactions; Telegram network notification happens only after indexing commits.
+- The movie row is locked only while quality/index state mutates, making rapid qualities deterministic without a global application lock.
+- Notification convergence is bounded and low-volume.
+- Ordinary archive/owner identifiers remain DB settings rather than environment variables.
+- Official Bot API documentation states webhook `update_id` can be used to restore sequence if updates arrive out of order and allows 1–100 simultaneous webhook connections.
+- CineGate does not yet include a durable global update sequencer. Therefore the **initial production webhook must use `max_connections=1`**. Raising webhook delivery concurrency is forbidden until a dedicated sequencing plan is implemented and tested. This keeps archive sequence semantics safe without prematurely adding a queue.
+
+### 2026-09-20 — final verification
+
+GitHub Actions verified on real PostgreSQL 16:
+
+- Ruff: **all checks passed**
+- pytest: **52 passed**
+- Alembic: **0001 → 0002 → 0003**, downgrade to base, then upgrade to head: passed
+- Python compileall: passed
+
+Two warnings are dependency deprecation notices from FastAPI/Starlette test internals, not CineGate application code.
 
 ## Completion summary
 
-Pending.
+Plan 0004 is complete.
+
+CineGate now has a secure webhook transport, DB-backed archive settings, real-time Archive Channel parsing/persistence, duplicate/rapid-event safety, and durable owner notification progress.
+
+**Next exact step:** create Plan 0005 before code for direct English movie search + result buttons + poster copy + available-quality buttons. Search must be typo-tolerant, bounded, secure against hostile input, and efficient without scanning the full catalog in Python.
