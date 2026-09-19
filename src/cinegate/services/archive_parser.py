@@ -237,11 +237,15 @@ def _extract_fields(caption: str) -> dict[str, str]:
         match = _FIELD_RE.match(raw_line)
         if not match:
             continue
-        label = match.group(1).strip().lstrip("#").casefold()
+        label = _normalize_label(match.group(1))
         value = match.group(2).strip()
         if label and value and label not in fields:
             fields[label] = value
     return fields
+
+
+def _normalize_label(raw_label: str) -> str:
+    return raw_label.strip().lstrip("#-*•–— ").casefold()
 
 
 def _extract_year_from_fields(fields: dict[str, str]) -> int | None:
@@ -256,7 +260,7 @@ def _extract_freeform_quality_title(caption: str) -> str | None:
 
         field_match = _FIELD_RE.match(line)
         if field_match is not None:
-            label = field_match.group(1).strip().lstrip("#").casefold()
+            label = _normalize_label(field_match.group(1))
             if label not in _TITLE_LABELS:
                 continue
 
