@@ -8,6 +8,7 @@ from aiogram.enums import ChatType
 from aiogram.exceptions import TelegramAPIError, TelegramBadRequest
 from aiogram.filters import CommandStart
 from aiogram.types import CallbackQuery, Message
+from sqlalchemy.exc import SQLAlchemyError
 
 from cinegate.bot.callbacks import (
     MovieBackCallback,
@@ -85,11 +86,15 @@ def build_user_router(
             keyboard = None
 
         sent = await message.answer(text, reply_markup=keyboard)
-        stored = await sessions.set_result_message(
-            telegram_user_id=message.from_user.id,
-            nonce=replacement.session.nonce,
-            message_id=sent.message_id,
-        )
+        try:
+            stored = await sessions.set_result_message(
+                telegram_user_id=message.from_user.id,
+                nonce=replacement.session.nonce,
+                message_id=sent.message_id,
+            )
+        except SQLAlchemyError:
+            await _safe_delete(bot, message.chat.id, sent.message_id)
+            raise
         if not stored:
             await _safe_delete(bot, message.chat.id, sent.message_id)
             return
@@ -158,12 +163,16 @@ def build_user_router(
             )
             raise
 
-        completed = await sessions.complete_movie(
-            telegram_user_id=user_id,
-            nonce=callback_data.nonce,
-            movie_id=callback_data.movie_id,
-            poster_message_id=copied.message_id,
-        )
+        try:
+            completed = await sessions.complete_movie(
+                telegram_user_id=user_id,
+                nonce=callback_data.nonce,
+                movie_id=callback_data.movie_id,
+                poster_message_id=copied.message_id,
+            )
+        except SQLAlchemyError:
+            await _safe_delete(bot, user_id, copied.message_id)
+            raise
         if not completed:
             await _safe_delete(bot, user_id, copied.message_id)
             return
@@ -221,11 +230,15 @@ def build_user_router(
             )
             raise
 
-        completed = await sessions.complete_back(
-            telegram_user_id=user_id,
-            nonce=callback_data.nonce,
-            result_message_id=sent.message_id,
-        )
+        try:
+            completed = await sessions.complete_back(
+                telegram_user_id=user_id,
+                nonce=callback_data.nonce,
+                result_message_id=sent.message_id,
+            )
+        except SQLAlchemyError:
+            await _safe_delete(bot, user_id, sent.message_id)
+            raise
         if not completed:
             await _safe_delete(bot, user_id, sent.message_id)
             return
