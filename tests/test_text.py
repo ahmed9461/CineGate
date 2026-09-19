@@ -1,6 +1,7 @@
 from cinegate.services.text import (
     clean_display_title,
     extract_quality,
+    extract_release_year,
     extract_year,
     normalize_title,
 )
@@ -28,3 +29,16 @@ def test_clean_display_title_preserves_words_but_removes_year_quality() -> None:
 
 def test_underscore_is_treated_as_a_separator() -> None:
     assert normalize_title("Spider_Man 2002") == "spider man"
+
+
+
+def test_year_only_movie_title_is_preserved() -> None:
+    assert normalize_title("1917") == "1917"
+    assert clean_display_title("1917") == "1917"
+    assert extract_release_year("1917") is None
+
+
+def test_year_title_with_release_year_keeps_title_and_extracts_release() -> None:
+    assert normalize_title("1917 2019") == "1917"
+    assert clean_display_title("1917 2019") == "1917"
+    assert extract_release_year("1917 2019") == 2019
