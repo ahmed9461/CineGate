@@ -152,3 +152,68 @@ The application foundation and pure parser are complete. Telegram webhook/archiv
 ### Exact next step
 
 Create `plans/0004-telegram-webhook-and-archive-indexer.md` before implementing aiogram/FastAPI webhook ingestion and durable real-time Archive Channel indexing.
+
+
+---
+
+## 2026-09-20 — Secure Telegram webhook and durable archive indexing completed
+
+### Plan
+
+- `plans/0004-telegram-webhook-and-archive-indexer.md` — completed
+
+### Implemented
+
+- secure FastAPI Telegram webhook
+- constant-time webhook secret validation
+- aiogram runtime/lifecycle
+- Archive Channel router and media adapter
+- DB runtime settings for archive/owner IDs
+- real-time poster/quality persistence
+- PostgreSQL transaction/idempotency handling
+- rapid concurrent-quality serialization
+- deterministic duplicate-resolution replacement
+- owner archive notification send/edit flow
+- durable owner-notification quality count
+- transient notification retry behavior
+- deterministic concurrent-notification convergence
+- migrations `0002` and `0003`
+
+### Review #1 — correctness
+
+Found and fixed:
+
+- nested async transaction-context style issues
+- notification loss after index commit + Telegram failure
+- duplicate webhook retry not previously knowing notification remained dirty
+- stale notification overwrite race during concurrent quality arrivals
+- false webhook acknowledgment risk on internal handler failure
+
+### Review #2 — performance / complexity
+
+Confirmed:
+
+- media files are never downloaded for indexing
+- indexing transactions are short
+- Telegram owner I/O is outside indexing transaction
+- no Redis/Celery/broker was added
+- row locks are scoped per movie for rapid quality writes
+- owner-notification convergence is bounded
+
+Telegram's official Bot API notes that webhook updates can require ordering restoration with `update_id`. Until a durable global sequencer exists, initial production webhook delivery must use `max_connections=1`.
+
+### Verification
+
+- Ruff: passed
+- pytest: **52 passed**
+- PostgreSQL 16 migrations 0001→0002→0003: passed
+- downgrade to base + upgrade to head: passed
+- compileall: passed
+
+### Current stop point
+
+Archive ingestion is implemented. End-user search/movie-page UX is next.
+
+### Exact next step
+
+Create `plans/0005-search-and-movie-page.md` before implementing direct English typo-tolerant search and movie/quality UI.
