@@ -94,12 +94,49 @@ CineGate should deliberately preserve/use Telegram formatting, rich-message capa
 
 ---
 
+## D-011 — Archive grouping is sequence-first
+
+**Status:** Accepted  
+**Date:** 2026-09-19
+
+A valid poster opens a movie group. Subsequent quality media are associated primarily by archive message sequence until a new poster boundary or stream end, subject to safety checks.
+
+Exact literal title equality is not required.
+
+Title normalization, year agreement, quality extraction, and textual similarity are supporting confidence signals.
+
+**Reason:** Real archive examples contain harmless caption differences such as `&` vs `and`, punctuation differences, spelling/format variation, and occasional poster/video title language differences.
+
+---
+
+## D-012 — Modern and legacy archive formats are both supported
+
+**Status:** Accepted  
+**Date:** 2026-09-19
+
+The current structured format is the primary parser path. Historical legacy posts remain supported for the one-time import and old archive compatibility.
+
+Legacy support includes optional `#طلب_المتابعين` and title-label variants `فيلم`, `فلم`, `الفيلم`, and `الفلم`.
+
+---
+
+## D-013 — Orphan and ambiguous groups are excluded from search
+
+**Status:** Accepted  
+**Date:** 2026-09-19
+
+A poster with no accepted following quality media does not become searchable. Unsafe/contradictory associations are marked ambiguous instead of being force-linked.
+
+**Reason:** A missed item is safer than delivering the wrong movie/quality.
+
+---
+
 # Pending decisions
 
-- Exact archive grouping/parser format
 - Backend/bot framework
 - Database
 - Ad provider
 - UserBot implementation library
 - Hosting/deployment model
 - Telegram Bot API/client library versions
+- Real-time archive edit/delete reconciliation behavior
