@@ -41,14 +41,16 @@ This roadmap is directional. Every phase requires its own detailed plan file bef
 ## Phase 3 — Archive indexing & initial import
 
 - [ ] Archive bot permissions
-- [ ] Archive event ingestion
-- [ ] Idempotent indexing
-- [ ] Movie + quality persistence
-- [ ] Owner “saved posts” notifications
+- [x] Archive event ingestion
+- [x] Idempotent indexing
+- [x] Movie + quality persistence
+- [x] Owner “saved posts” notifications
 - [ ] One-time UserBot importer
 - [ ] Import progress/reporting
-- [ ] Resume/retry support
+- [x] Resume/retry support
 - [ ] Large-history validation
+
+**Real-time implementation:** `plans/0004-telegram-webhook-and-archive-indexer.md`
 
 ## Phase 4 — Search experience
 
