@@ -53,6 +53,7 @@ class Movie(Base):
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")
     raw_poster_caption: Mapped[str] = mapped_column(Text, nullable=False)
     parser_confidence: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=0)
+    owner_notification_message_id: Mapped[int | None] = mapped_column(BigInteger)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
