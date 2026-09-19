@@ -117,6 +117,35 @@ class MovieQuality(Base):
     movie: Mapped[Movie] = relationship(back_populates="qualities")
 
 
+class UserSearchSession(Base):
+    __tablename__ = "user_search_sessions"
+    __table_args__ = (
+        CheckConstraint(
+            "state IN ('results', 'opening', 'movie', 'returning')",
+            name="ck_user_search_sessions_state",
+        ),
+    )
+
+    telegram_user_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    nonce: Mapped[str] = mapped_column(String(16), nullable=False)
+    raw_query: Mapped[str] = mapped_column(String(128), nullable=False)
+    normalized_query: Mapped[str] = mapped_column(String(512), nullable=False)
+    result_movie_ids: Mapped[list[int]] = mapped_column(JSONB, nullable=False)
+    state: Mapped[str] = mapped_column(String(16), nullable=False, default="results")
+    selected_movie_id: Mapped[int | None] = mapped_column(
+        BigInteger,
+        ForeignKey("movies.id", ondelete="SET NULL"),
+    )
+    result_message_id: Mapped[int | None] = mapped_column(BigInteger)
+    poster_message_id: Mapped[int | None] = mapped_column(BigInteger)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+
 class AppSetting(Base):
     __tablename__ = "app_settings"
 
