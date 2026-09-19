@@ -413,6 +413,7 @@ class BlockingFirstSendBot(FakeBot):
     def __init__(self) -> None:
         super().__init__()
         self.first_send_started = asyncio.Event()
+        self.second_send_started = asyncio.Event()
         self.release_first_send = asyncio.Event()
         self.messages: dict[int, str] = {}
 
@@ -425,6 +426,8 @@ class BlockingFirstSendBot(FakeBot):
         if len(self.sent) == 1:
             self.first_send_started.set()
             await self.release_first_send.wait()
+        elif len(self.sent) == 2:
+            self.second_send_started.set()
 
         return SimpleNamespace(message_id=message_id)
 
@@ -469,7 +472,7 @@ async def test_concurrent_owner_notifiers_converge_to_latest_quality_count(
     assert second.quality_count == 2
 
     second_notice = asyncio.create_task(notifier.notify_movie(first.movie_id))
-    await asyncio.sleep(0)
+    await bot.second_send_started.wait()
     bot.release_first_send.set()
 
     await asyncio.gather(first_notice, second_notice)
