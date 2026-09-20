@@ -91,7 +91,19 @@ No external movie catalog lookup is required for normal operation.
 
 ### Initial archive population
 
-Owner temporarily disables content-forwarding restriction in the original private channel, uses a UserBot for the one-time historical transfer to the Archive Channel, then can re-enable protection.
+Owner temporarily disables content-forwarding restriction in the original private channel, uses the one-time Telethon UserBot importer to transfer historical messages to the Archive Channel, then can re-enable protection.
+
+The importer:
+
+- runs as a separate CLI process
+- does not remain active during normal CineGate service operation
+- copies/forwards Telegram-side without downloading movie media
+- preserves source order
+- stores durable source→archive message mapping
+- resumes after interruption
+- reconciles already-forwarded messages before retrying
+- stops safely instead of bypassing protected forwarding
+- performs sequential historical reindex after transfer
 
 ### Ongoing archive population
 
@@ -116,18 +128,22 @@ See `plans/0002-archive-format-and-parser.md`.
 
 ## Owner experience
 
-Owner/admin functionality should make routine changes possible without code edits/restarts.
+Routine owner configuration is implemented through an owner-only Telegram control center.
 
-Editable categories include:
+Implemented categories include:
 
 - messages/templates
 - deletion duration
-- search behavior where safe
-- result count
-- ad behavior that is non-secret
-- archive notifications
-- buttons/presentation
-- other runtime settings
+- search behavior and result count
+- archive/source/notification identifiers
+- public Mini App URL and AdsGram Block ID
+- reward/session timing
+- status and diagnostics
+- audit history and reset/default behavior
+
+Sensitive bootstrap values remain environment-only.
+
+Formatted owner messages preserve Telegram entities. Advanced Rich Message authoring and visual button-style customization remain separate future presentation work.
 
 ## Template system
 
@@ -183,7 +199,6 @@ Must handle safely:
 - production AdsGram Block ID/platform/public URL values
 - production deployment topology and callback access-log redaction
 - real-time archive edit/delete reconciliation behavior
-- historical UserBot import implementation
 - final Rich Message owner-editor feature set
 - durable global webhook sequencing before webhook concurrency is increased
 
