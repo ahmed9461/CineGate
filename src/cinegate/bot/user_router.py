@@ -23,21 +23,11 @@ from cinegate.bot.keyboards import (
 from cinegate.db.session import Database
 from cinegate.domain.rewards import ActiveRewardConflict, RewardQualityUnavailable
 from cinegate.domain.search import SearchQueryError
-from cinegate.presentation.messages import (
-    ACTIVE_REWARD_CONFLICT,
-    MOVIE_UNAVAILABLE,
-    NO_SEARCH_RESULTS,
-    REWARD_NOT_CONFIGURED,
-    REWARD_PROMPT,
-    STALE_SEARCH,
-    WELCOME,
-    render_search_results,
-)
 from cinegate.repositories.settings import SettingsRepository
-from cinegate.repositories.templates import MessageTemplateRepository
 from cinegate.services.movie_search import MovieSearchService
 from cinegate.services.reward_sessions import RewardSessionService
 from cinegate.services.search_sessions import SearchSessionService
+from cinegate.services.templates import TemplateService
 from cinegate.services.text import normalize_title
 
 logger = logging.getLogger(__name__)
@@ -49,13 +39,17 @@ def build_user_router(
     search: MovieSearchService,
     sessions: SearchSessionService,
     rewards: RewardSessionService,
+    templates: TemplateService,
 ) -> Router:
     router = Router(name="users")
 
     @router.message(CommandStart(), F.chat.type == ChatType.PRIVATE)
     async def start(message: Message) -> None:
-        text = await _template(database, "welcome", WELCOME)
-        await message.answer(text)
+        rendered = await templates.render("welcome")
+        await message.answer(
+            rendered.text,
+            entities=list(rendered.entities) or None,
+        )
 
     @router.message(F.chat.type == ChatType.PRIVATE, F.text)
     async def direct_movie_search(message: Message, bot: Bot) -> None:
@@ -82,18 +76,23 @@ def build_user_router(
         )
 
         if results:
-            default_text = render_search_results(len(results))
-            text = await _template(database, "search_results", default_text)
-            text = text.replace("%count%", str(len(results)))
+            rendered = await templates.render(
+                "search_results",
+                {"%count%": str(len(results))},
+            )
             keyboard = build_search_results_keyboard(
                 results,
                 nonce=replacement.session.nonce,
             )
         else:
-            text = await _template(database, "search_no_results", NO_SEARCH_RESULTS)
+            rendered = await templates.render("search_no_results")
             keyboard = None
 
-        sent = await message.answer(text, reply_markup=keyboard)
+        sent = await message.answer(
+            rendered.text,
+            entities=list(rendered.entities) or None,
+            reply_markup=keyboard,
+        )
         try:
             stored = await sessions.set_result_message(
                 telegram_user_id=message.from_user.id,
@@ -124,7 +123,12 @@ def build_user_router(
         user_id = callback.from_user.id
         view = await search.get_movie_view(callback_data.movie_id)
         if view is None:
-            await _safe_callback_answer(callback, MOVIE_UNAVAILABLE, show_alert=True)
+            rendered = await templates.render("movie_unavailable")
+            await _safe_callback_answer(
+                callback,
+                rendered.text,
+                show_alert=True,
+            )
             return
 
         claimed = await sessions.claim_movie(
@@ -133,7 +137,8 @@ def build_user_router(
             movie_id=callback_data.movie_id,
         )
         if claimed is None:
-            await _safe_callback_answer(callback, STALE_SEARCH)
+            rendered = await templates.render("stale_search")
+            await _safe_callback_answer(callback, rendered.text)
             return
 
         await _safe_callback_answer(callback)
@@ -161,7 +166,12 @@ def build_user_router(
                 view.poster_message_id,
                 exc_info=True,
             )
-            await bot.send_message(user_id, MOVIE_UNAVAILABLE)
+            rendered = await templates.render("movie_unavailable")
+            await bot.send_message(
+                user_id,
+                rendered.text,
+                entities=list(rendered.entities) or None,
+            )
             return
         except TelegramAPIError:
             await sessions.reset_opening(
@@ -200,24 +210,28 @@ def build_user_router(
             nonce=callback_data.nonce,
         )
         if current is None or current.state != "movie":
-            await _safe_callback_answer(callback, STALE_SEARCH)
+            rendered = await templates.render("stale_search")
+            await _safe_callback_answer(callback, rendered.text)
             return
 
         results = await search.get_results_by_ids(current.result_movie_ids)
         if not results:
-            await _safe_callback_answer(callback, STALE_SEARCH)
+            rendered = await templates.render("stale_search")
+            await _safe_callback_answer(callback, rendered.text)
             return
 
-        default_text = render_search_results(len(results))
-        text = await _template(database, "search_results", default_text)
-        text = text.replace("%count%", str(len(results)))
+        rendered = await templates.render(
+            "search_results",
+            {"%count%": str(len(results))},
+        )
 
         claimed = await sessions.claim_back(
             telegram_user_id=user_id,
             nonce=callback_data.nonce,
         )
         if claimed is None:
-            await _safe_callback_answer(callback, STALE_SEARCH)
+            rendered = await templates.render("stale_search")
+            await _safe_callback_answer(callback, rendered.text)
             return
 
         await _safe_callback_answer(callback)
@@ -225,7 +239,8 @@ def build_user_router(
         try:
             sent = await bot.send_message(
                 user_id,
-                text,
+                rendered.text,
+                entities=list(rendered.entities) or None,
                 reply_markup=build_search_results_keyboard(
                     results,
                     nonce=callback_data.nonce,
@@ -270,19 +285,26 @@ def build_user_router(
             or current.state != "movie"
             or current.selected_movie_id != callback_data.movie_id
         ):
-            await _safe_callback_answer(callback, STALE_SEARCH)
+            rendered = await templates.render("stale_search")
+            await _safe_callback_answer(callback, rendered.text)
             return
 
         view = await search.get_movie_view(callback_data.movie_id)
         if view is None or callback_data.quality not in view.qualities:
-            await _safe_callback_answer(callback, MOVIE_UNAVAILABLE, show_alert=True)
+            rendered = await templates.render("movie_unavailable")
+            await _safe_callback_answer(
+                callback,
+                rendered.text,
+                show_alert=True,
+            )
             return
 
         reward_config = await _reward_config(database)
         if reward_config is None:
+            rendered = await templates.render("reward_not_configured")
             await _safe_callback_answer(
                 callback,
-                REWARD_NOT_CONFIGURED,
+                rendered.text,
                 show_alert=True,
             )
             return
@@ -296,14 +318,23 @@ def build_user_router(
                 quality=callback_data.quality,
             )
         except ActiveRewardConflict as exc:
-            text = ACTIVE_REWARD_CONFLICT.replace(
-                "%quality%",
-                exc.session.quality,
+            rendered = await templates.render(
+                "active_reward_conflict",
+                {"%quality%": exc.session.quality},
             )
-            await _safe_callback_answer(callback, text, show_alert=True)
+            await _safe_callback_answer(
+                callback,
+                rendered.text,
+                show_alert=True,
+            )
             return
         except RewardQualityUnavailable:
-            await _safe_callback_answer(callback, MOVIE_UNAVAILABLE, show_alert=True)
+            rendered = await templates.render("movie_unavailable")
+            await _safe_callback_answer(
+                callback,
+                rendered.text,
+                show_alert=True,
+            )
             return
 
         claimed = await rewards.claim_prompt(
@@ -319,10 +350,12 @@ def build_user_router(
 
         await _safe_callback_answer(callback, "جاري تجهيز الإعلان...")
 
-        prompt = await _template(database, "reward_prompt", REWARD_PROMPT)
-        prompt = (
-            prompt.replace("%movie%", view.display_title)
-            .replace("%quality%", callback_data.quality)
+        rendered_prompt = await templates.render(
+            "reward_prompt",
+            {
+                "%movie%": view.display_title,
+                "%quality%": callback_data.quality,
+            },
         )
         miniapp_url = (
             f"{public_base_url.rstrip('/')}/miniapp/reward/{reward.id}"
@@ -331,7 +364,8 @@ def build_user_router(
         try:
             sent = await bot.send_message(
                 user_id,
-                prompt,
+                rendered_prompt.text,
+                entities=list(rendered_prompt.entities) or None,
                 reply_markup=build_reward_keyboard(miniapp_url),
             )
         except TelegramAPIError:
@@ -372,11 +406,6 @@ async def _reward_config(database: Database) -> tuple[str, str] | None:
     if not isinstance(block_id, str) or not block_id.strip():
         return None
     return public_base_url.rstrip("/"), block_id.strip()
-
-
-async def _template(database: Database, key: str, default: str) -> str:
-    async with database.session() as session:
-        return await MessageTemplateRepository(session).get_body(key, default)
 
 
 async def _cleanup_previous_ui(
