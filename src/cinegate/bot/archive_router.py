@@ -7,6 +7,8 @@ from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from aiogram.types import Message
 
 from cinegate.bot.adapters import telegram_message_to_archive
+from cinegate.db.session import Database
+from cinegate.repositories.import_jobs import is_bulk_import_active
 from cinegate.services.archive_indexer import ArchiveIndexService
 from cinegate.services.owner_notifier import OwnerArchiveNotifier
 
@@ -16,6 +18,8 @@ logger = logging.getLogger(__name__)
 def build_archive_router(
     indexer: ArchiveIndexService,
     notifier: OwnerArchiveNotifier,
+    *,
+    database: Database | None = None,
 ) -> Router:
     router = Router(name="archive")
 
@@ -28,6 +32,11 @@ def build_archive_router(
 
         if not result.should_notify_owner or result.movie_id is None:
             return
+
+        if database is not None:
+            async with database.session() as session:
+                if await is_bulk_import_active(session, message.chat.id):
+                    return
 
         try:
             await notifier.notify_movie(result.movie_id)
