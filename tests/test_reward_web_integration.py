@@ -270,3 +270,76 @@ async def test_provider_callback_without_active_session_is_harmless(setup) -> No
     )
 
     assert response.status_code == 204
+
+
+
+@pytest.mark.asyncio
+async def test_unknown_reward_page_returns_404(setup) -> None:
+    _database, _runtime, _reward, client = setup
+    unknown_id = "00000000-0000-0000-0000-000000000001"
+
+    response = await client.get(f"/miniapp/reward/{unknown_id}")
+
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_expired_reward_page_returns_410(setup) -> None:
+    database, _runtime, reward, client = setup
+
+    async with database.session() as session, session.begin():
+        row = await session.get(RewardSession, reward.id)
+        assert row is not None
+        row.expires_at = datetime.now(UTC).replace(microsecond=0)
+        row.expires_at = row.expires_at.replace(
+            second=max(0, row.expires_at.second - 1)
+        )
+
+    response = await client.get(f"/miniapp/reward/{reward.id}")
+
+    assert response.status_code == 410
+
+
+@pytest.mark.asyncio
+async def test_invalid_client_signature_is_rejected_by_endpoint(setup) -> None:
+    _database, _runtime, reward, client = setup
+
+    response = await client.post(
+        f"/api/rewards/{reward.id}/claim",
+        json={"init_data": "auth_date=1&hash=invalid"},
+    )
+
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_provider_callback_can_be_disabled(setup) -> None:
+    _database, runtime, _reward, client = setup
+    runtime.settings.adsgram_callback_secret = None
+
+    response = await client.get(
+        f"/providers/adsgram/reward/{CALLBACK_SECRET}",
+        params={"userid": USER_ID},
+    )
+
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_client_then_provider_triggers_delivery(setup) -> None:
+    _database, runtime, reward, client = setup
+
+    claim = await client.post(
+        f"/api/rewards/{reward.id}/claim",
+        json={"init_data": signed_init_data()},
+    )
+    assert claim.status_code == 202
+    assert runtime.delivery.calls == []
+
+    provider = await client.get(
+        f"/providers/adsgram/reward/{CALLBACK_SECRET}",
+        params={"userid": USER_ID},
+    )
+
+    assert provider.status_code == 204
+    assert runtime.delivery.calls == [reward.id]
