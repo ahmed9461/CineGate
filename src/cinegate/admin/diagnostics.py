@@ -7,6 +7,7 @@ from sqlalchemy import func, select
 
 from cinegate.db.models import (
     AdminAuditLog,
+    ArchiveImportJob,
     Delivery,
     Movie,
     MovieQuality,
@@ -50,6 +51,19 @@ class RecentAudit:
 
 
 @dataclass(frozen=True, slots=True)
+class LatestImport:
+    job_id: str
+    source_channel_id: int
+    archive_channel_id: int
+    status: str
+    copied_messages: int
+    reconciled_messages: int
+    reindexed_messages: int
+    missing_archive_messages: int
+    last_error: str | None
+
+
+@dataclass(frozen=True, slots=True)
 class DiagnosticsSnapshot:
     indexed_movies: int
     pending_movies: int
@@ -64,6 +78,7 @@ class DiagnosticsSnapshot:
     problem_movies: tuple[ProblemMovie, ...]
     failed_deletions: tuple[FailedDeletion, ...]
     recent_audits: tuple[RecentAudit, ...]
+    latest_import: LatestImport | None
 
 
 class AdminDiagnosticsService:
@@ -143,6 +158,27 @@ class AdminDiagnosticsService:
                 )
             ).all()
 
+            latest_import_row = (
+                await session.execute(
+                    select(
+                        ArchiveImportJob.id,
+                        ArchiveImportJob.source_channel_id,
+                        ArchiveImportJob.archive_channel_id,
+                        ArchiveImportJob.status,
+                        ArchiveImportJob.copied_messages,
+                        ArchiveImportJob.reconciled_messages,
+                        ArchiveImportJob.reindexed_messages,
+                        ArchiveImportJob.missing_archive_messages,
+                        ArchiveImportJob.last_error,
+                    )
+                    .order_by(
+                        ArchiveImportJob.updated_at.desc(),
+                        ArchiveImportJob.created_at.desc(),
+                    )
+                    .limit(1)
+                )
+            ).one_or_none()
+
             failures = (
                 await session.execute(
                     select(
@@ -196,5 +232,20 @@ class AdminDiagnosticsService:
                     created_at=row.created_at,
                 )
                 for row in audits
+            ),
+            latest_import=(
+                LatestImport(
+                    job_id=str(latest_import_row.id),
+                    source_channel_id=latest_import_row.source_channel_id,
+                    archive_channel_id=latest_import_row.archive_channel_id,
+                    status=latest_import_row.status,
+                    copied_messages=latest_import_row.copied_messages,
+                    reconciled_messages=latest_import_row.reconciled_messages,
+                    reindexed_messages=latest_import_row.reindexed_messages,
+                    missing_archive_messages=latest_import_row.missing_archive_messages,
+                    last_error=latest_import_row.last_error,
+                )
+                if latest_import_row is not None
+                else None
             ),
         )
