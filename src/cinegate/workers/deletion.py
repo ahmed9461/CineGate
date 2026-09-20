@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from contextlib import suppress
 
 from aiogram import Bot
 from aiogram.exceptions import TelegramAPIError, TelegramBadRequest
 
+from cinegate.domain.delivery import DueDeletion
 from cinegate.services.delivery import DeliveryService
 
 logger = logging.getLogger(__name__)
@@ -41,23 +43,29 @@ class DeliveryDeletionWorker:
             )
             if due:
                 semaphore = asyncio.Semaphore(self._concurrency)
-
-                async def delete_one(item) -> None:
-                    async with semaphore:
-                        await self._delete_one(item)
-
-                await asyncio.gather(*(delete_one(item) for item in due))
+                await asyncio.gather(
+                    *(
+                        self._delete_with_semaphore(item, semaphore)
+                        for item in due
+                    )
+                )
                 continue
 
-            try:
+            with suppress(TimeoutError):
                 await asyncio.wait_for(
                     stop_event.wait(),
                     timeout=self._poll_seconds,
                 )
-            except TimeoutError:
-                pass
 
-    async def _delete_one(self, item) -> None:
+    async def _delete_with_semaphore(
+        self,
+        item: DueDeletion,
+        semaphore: asyncio.Semaphore,
+    ) -> None:
+        async with semaphore:
+            await self._delete_one(item)
+
+    async def _delete_one(self, item: DueDeletion) -> None:
         try:
             await self._bot.delete_message(
                 chat_id=item.telegram_user_id,
