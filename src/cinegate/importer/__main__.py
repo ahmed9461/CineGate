@@ -1,7 +1,8 @@
-from __future__ import annotations
+def _run() -> None:
+    from .cli import main
 
-from .cli import main
+    main()
 
 
 if __name__ == "__main__":
-    main()
+    _run()
