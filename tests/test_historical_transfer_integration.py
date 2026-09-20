@@ -496,3 +496,35 @@ async def test_nonmonotonic_destination_ids_pause_without_checkpoint(
     assert job.status == "paused"
     assert job.last_copied_source_message_id == 0
     assert mapping_count == 0
+
+
+
+@pytest.mark.asyncio
+async def test_progress_failure_does_not_abort_historical_transfer(
+    database: Database,
+) -> None:
+    gateway = FakeGateway(
+        [
+            source_message(1, text="one"),
+            source_message(2, text="two"),
+        ]
+    )
+
+    async def broken_progress(job):
+        raise RuntimeError("progress channel unavailable")
+
+    service = HistoricalImportService(
+        database=database,
+        gateway=gateway,  # type: ignore[arg-type]
+        batch_size=2,
+        progress_callback=broken_progress,
+    )
+
+    job = await service.transfer(
+        source_channel_id=SOURCE_ID,
+        archive_channel_id=ARCHIVE_ID,
+    )
+
+    assert job.status == "transferred"
+    assert job.copied_messages == 2
+    assert gateway.forward_batches == [(1, 2)]
