@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import func, select, update
+from sqlalchemy import func, select, text, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -339,6 +339,8 @@ async def is_bulk_import_active(
         .where(
             ArchiveImportJob.archive_channel_id == archive_channel_id,
             ArchiveImportJob.status.in_(_ACTIVE_BULK_STATUSES),
+            ArchiveImportJob.updated_at
+            >= func.now() - text("interval '30 minutes'"),
         )
         .limit(1)
     )
