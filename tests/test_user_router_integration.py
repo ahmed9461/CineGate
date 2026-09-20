@@ -9,7 +9,11 @@ import pytest_asyncio
 from sqlalchemy import delete, select
 from sqlalchemy.exc import SQLAlchemyError
 
-from cinegate.bot.callbacks import MovieBackCallback, MovieSelectCallback
+from cinegate.bot.callbacks import (
+    MovieBackCallback,
+    MovieSelectCallback,
+    QualitySelectCallback,
+)
 from cinegate.bot.user_router import build_user_router
 from cinegate.db.models import (
     AppSetting,
@@ -422,3 +426,130 @@ async def test_copied_poster_is_deleted_if_movie_state_persistence_fails(
 
     assert len(bot.copied) == 1
     assert (USER_ID, 2000) in bot.deleted
+
+
+
+async def configure_reward_ui(database: Database) -> None:
+    async with database.session() as session, session.begin():
+        session.add_all(
+            [
+                AppSetting(
+                    key="public_base_url",
+                    value="https://cinegate.example",
+                ),
+                AppSetting(
+                    key="adsgram_block_id",
+                    value="12345",
+                ),
+            ]
+        )
+
+
+async def open_movie_for_quality_test(database: Database, bot: FakeBot):
+    search = MovieSearchService(database)
+    sessions = SearchSessionService(database)
+    rewards = RewardSessionService(database)
+    router = build_user_router(
+        database=database,
+        search=search,
+        sessions=sessions,
+        rewards=rewards,
+    )
+
+    search_handler = handler(router, "message", "direct_movie_search")
+    incoming = FakeIncomingMessage("Interstellar")
+    await search_handler(incoming, bot=bot)
+
+    movie_button = incoming.answers[0].reply_markup.inline_keyboard[0][0]
+    movie_data = MovieSelectCallback.unpack(movie_button.callback_data)
+    select_handler = handler(router, "callback_query", "select_movie")
+    await select_handler(
+        FakeCallback(),
+        callback_data=movie_data,
+        bot=bot,
+    )
+
+    return router, bot.copied[0]["reply_markup"]
+
+
+@pytest.mark.asyncio
+async def test_rapid_duplicate_quality_click_sends_one_reward_prompt(
+    database: Database,
+) -> None:
+    await seed_movie(database)
+    await configure_reward_ui(database)
+    bot = FakeBot()
+    router, keyboard = await open_movie_for_quality_test(database, bot)
+
+    quality_button = keyboard.inline_keyboard[0][0]
+    assert quality_button.callback_data is not None
+    quality_data = QualitySelectCallback.unpack(quality_button.callback_data)
+    quality_handler = handler(router, "callback_query", "select_quality")
+
+    first_callback = FakeCallback()
+    second_callback = FakeCallback()
+    await asyncio.gather(
+        quality_handler(
+            first_callback,
+            callback_data=quality_data,
+            bot=bot,
+        ),
+        quality_handler(
+            second_callback,
+            callback_data=quality_data,
+            bot=bot,
+        ),
+    )
+
+    assert len(bot.sent) == 1
+    reward_message = bot.sent[0]
+    assert "Interstellar" in reward_message.text
+    assert "720p" in reward_message.text
+    button = reward_message.reply_markup.inline_keyboard[0][0]
+    assert button.web_app is not None
+    assert button.web_app.url.startswith(
+        "https://cinegate.example/miniapp/reward/"
+    )
+
+    async with database.session() as session:
+        rewards = (
+            await session.execute(select(RewardSession))
+        ).scalars().all()
+
+    assert len(rewards) == 1
+    assert rewards[0].prompt_message_id == reward_message.message_id
+
+
+@pytest.mark.asyncio
+async def test_active_reward_prevents_switching_quality_silently(
+    database: Database,
+) -> None:
+    await seed_movie(database)
+    await configure_reward_ui(database)
+    bot = FakeBot()
+    router, keyboard = await open_movie_for_quality_test(database, bot)
+    quality_handler = handler(router, "callback_query", "select_quality")
+
+    first_button = keyboard.inline_keyboard[0][0]
+    second_button = keyboard.inline_keyboard[0][1]
+    first_data = QualitySelectCallback.unpack(first_button.callback_data)
+    second_data = QualitySelectCallback.unpack(second_button.callback_data)
+
+    await quality_handler(
+        FakeCallback(),
+        callback_data=first_data,
+        bot=bot,
+    )
+
+    conflict_callback = FakeCallback()
+    await quality_handler(
+        conflict_callback,
+        callback_data=second_data,
+        bot=bot,
+    )
+
+    assert len(bot.sent) == 1
+    assert conflict_callback.answers
+    text, show_alert = conflict_callback.answers[-1]
+    assert show_alert is True
+    assert "720p" in (text or "")
