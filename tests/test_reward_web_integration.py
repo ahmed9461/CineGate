@@ -4,7 +4,7 @@ import hashlib
 import hmac
 import json
 import os
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from urllib.parse import urlencode
 
@@ -290,10 +290,7 @@ async def test_expired_reward_page_returns_410(setup) -> None:
     async with database.session() as session, session.begin():
         row = await session.get(RewardSession, reward.id)
         assert row is not None
-        row.expires_at = datetime.now(UTC).replace(microsecond=0)
-        row.expires_at = row.expires_at.replace(
-            second=max(0, row.expires_at.second - 1)
-        )
+        row.expires_at = datetime.now(UTC) - timedelta(seconds=1)
 
     response = await client.get(f"/miniapp/reward/{reward.id}")
 
