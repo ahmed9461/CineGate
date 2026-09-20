@@ -331,6 +331,7 @@ TEMPLATES: dict[str, TemplateDefinition] = {
             MOVIE_UNAVAILABLE,
             frozenset(),
             {},
+            max_length=200,
         ),
         TemplateDefinition(
             "stale_search",
@@ -338,6 +339,7 @@ TEMPLATES: dict[str, TemplateDefinition] = {
             STALE_SEARCH,
             frozenset(),
             {},
+            max_length=200,
         ),
         TemplateDefinition(
             "reward_not_configured",
@@ -345,6 +347,7 @@ TEMPLATES: dict[str, TemplateDefinition] = {
             REWARD_NOT_CONFIGURED,
             frozenset(),
             {},
+            max_length=200,
         ),
         TemplateDefinition(
             "active_reward_conflict",
@@ -352,6 +355,7 @@ TEMPLATES: dict[str, TemplateDefinition] = {
             ACTIVE_REWARD_CONFLICT,
             frozenset({"%quality%"}),
             {"%quality%": "720p"},
+            max_length=200,
         ),
     )
 }
