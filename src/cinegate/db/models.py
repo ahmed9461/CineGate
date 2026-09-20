@@ -215,7 +215,9 @@ class Delivery(Base):
     __tablename__ = "deliveries"
     __table_args__ = (
         CheckConstraint(
-            "status IN ('pending', 'sending', 'sent', 'deleting', 'deleted')",
+            "status IN ("
+            "'pending', 'sending', 'sent', 'deleting', 'deleted', 'delete_failed'"
+            ")",
             name="ck_deliveries_status",
         ),
         UniqueConstraint("reward_session_id", name="uq_deliveries_reward_session"),
