@@ -205,9 +205,20 @@ class HistoricalImportService:
         job = await self._get_job(job_id)
         if job is None:
             raise HistoricalImportError("historical import job not found")
-        if job.status not in {"transferred", "reindexing", "completed"}:
+        allowed_statuses = {
+            "transferred",
+            "reindexing",
+            "completed",
+            "paused",
+            "failed",
+        }
+        if job.status not in allowed_statuses:
             raise HistoricalImportError(
                 f"cannot reindex import job while status={job.status}"
+            )
+        if job.status in {"paused", "failed"} and not _transfer_is_complete(job):
+            raise HistoricalImportError(
+                "cannot resume reindex before historical transfer is complete"
             )
 
         async with historical_import_lock(
@@ -575,3 +586,11 @@ def _require_strictly_increasing(values: tuple[int, ...], label: str) -> None:
         for left, right in zip(values, values[1:], strict=False)
     ):
         raise HistoricalImportError(f"{label} are not strictly increasing")
+
+
+
+def _transfer_is_complete(job: ImportJobSnapshot) -> bool:
+    return (
+        job.source_high_watermark_id is not None
+        and job.last_copied_source_message_id >= job.source_high_watermark_id
+    )
