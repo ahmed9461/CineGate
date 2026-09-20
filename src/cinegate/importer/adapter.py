@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from telethon import utils
-from telethon.tl.types import MessageService
+from telethon.tl.types import MessageEmpty, MessageService
 
 from cinegate.domain.archive import ArchiveMessage, MediaKind
 
@@ -11,7 +11,7 @@ from cinegate.domain.archive import ArchiveMessage, MediaKind
 def is_importable_message(message: Any) -> bool:
     return (
         message is not None
-        and not isinstance(message, MessageService)
+        and not isinstance(message, (MessageEmpty, MessageService))
         and int(getattr(message, "id", 0) or 0) > 0
     )
 
