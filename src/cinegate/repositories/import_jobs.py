@@ -266,11 +266,12 @@ class ArchiveImportRepository:
         if mapping is None:
             raise RuntimeError("import mapping disappeared during reindex")
 
-        if not missing and mapping.reindexed_at is None:
+        if mapping.reindexed_at is None:
             mapping.reindexed_at = datetime.now(UTC)
-            job.reindexed_messages += 1
-        elif missing:
-            job.missing_archive_messages += 1
+            if missing:
+                job.missing_archive_messages += 1
+            else:
+                job.reindexed_messages += 1
 
         if source_message_id > job.last_reindexed_source_message_id:
             job.last_reindexed_source_message_id = source_message_id
