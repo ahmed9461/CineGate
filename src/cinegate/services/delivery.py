@@ -22,6 +22,7 @@ from cinegate.repositories.templates import MessageTemplateRepository
 _DEFAULT_DELETE_SECONDS = 120
 _MIN_DELETE_SECONDS = 5
 _MAX_DELETE_SECONDS = 172000
+_TELEGRAM_DELETE_MAX_AGE = timedelta(hours=48)
 _MAX_ERROR_LENGTH = 1000
 
 
@@ -334,6 +335,17 @@ class DeliveryService:
 
             tasks: list[DueDeletion] = []
             for delivery in rows:
+                if (
+                    delivery.sent_at is not None
+                    and now - delivery.sent_at >= _TELEGRAM_DELETE_MAX_AGE
+                ):
+                    delivery.status = "delete_failed"
+                    delivery.next_attempt_at = None
+                    delivery.last_error = (
+                        "Telegram delete window exceeded 48 hours"
+                    )
+                    continue
+
                 delivery.status = "deleting"
                 delivery.delete_started_at = now
                 tasks.append(
@@ -363,6 +375,25 @@ class DeliveryService:
                     last_error=None,
                 )
             )
+
+    async def mark_delete_failed(self, delivery_id: int, error: str) -> None:
+        async with self._database.session() as session, session.begin():
+            delivery = await session.scalar(
+                select(Delivery)
+                .where(
+                    Delivery.id == delivery_id,
+                    Delivery.status == "deleting",
+                )
+                .with_for_update()
+            )
+            if delivery is None:
+                return
+
+            delivery.status = "delete_failed"
+            delivery.attempts += 1
+            delivery.last_error = error[:_MAX_ERROR_LENGTH]
+            delivery.delete_started_at = None
+            delivery.next_attempt_at = None
 
     async def reschedule_delete(self, delivery_id: int, error: str) -> None:
         now = _utcnow()
