@@ -1,8 +1,8 @@
 # CineGate Project Status
 
 **Last updated:** 2026-09-20  
-**Overall status:** 🟢 Reward/delivery/deletion complete; owner control center next  
-**Code status:** Plans 0003–0006 are implemented and CI-verified.
+**Overall status:** 🟢 Owner control center complete; historical archive import next  
+**Code status:** Plans 0003–0007 are implemented and CI-verified.
 
 ## Completed
 
@@ -17,33 +17,28 @@
 - PostgreSQL pg_trgm canonical + quality-title alias search.
 - Durable per-user search state and stale callback protection.
 - Archive poster/info copy and real quality buttons.
-- Back navigation and styled Telegram buttons.
-- Reward session bound to exact user/movie/quality.
-- Telegram-signed Mini App identity validation.
-- AdsGram Reward Mini App + server callback integration.
-- Dual client/provider reward verification.
-- Duplicate/conflicting reward-prompt protection.
-- Reward persistence across delivery failures and ad-session expiry.
-- Exact Archive Channel quality copy.
-- Dynamic delivery caption variables.
-- Persistent delivery/delete deadline.
-- Durable deletion worker with retry/backoff.
-- Periodic stale-state reconciliation.
-- Multi-worker deletion safety via `SKIP LOCKED`.
-- Honest permanent deletion failure state after Telegram's deletion window.
-- Security/operations invariants in `docs/SECURITY.md`.
+- Rewarded AdsGram Mini App path with dual proof.
+- Exact-quality Telegram delivery and durable deletion/recovery.
+- Honest `delete_failed` state when Telegram can no longer delete.
+- Owner-only Telegram control center.
+- DB-backed runtime settings with no restart requirement.
+- Formatted Telegram template editing with entities preserved.
+- Durable owner edit sessions and audit log.
+- Owner status/diagnostics for archive/rewards/deletion problems.
+- Owner edit messages restricted to private chat.
+- Admin callbacks/keys allowlisted and rapid edits serialized.
 
 ## Verification
 
-Latest full code verification before documentation-only closeout:
+Latest full verification after Plan 0007:
 
 - Ruff: passed
-- pytest: **137 passed**
-- PostgreSQL 16 migrations `0001 → 0008`: passed
+- pytest: **176 passed**
+- PostgreSQL 16 migrations `0001 → 0009`: passed
 - full downgrade to base + restore to head: passed
 - Python compileall: passed
 
-Two warnings are dependency deprecation notices from FastAPI/Starlette internals, not CineGate code.
+The two warnings are dependency deprecation notices from FastAPI/Starlette internals, not CineGate code.
 
 ## Current user flow
 
@@ -51,55 +46,66 @@ Implemented:
 
 `type title → results → movie poster/info → choose quality → reward Mini App → verified reward → quality copied from archive → durable timed deletion`
 
-Production AdsGram credentials/Block ID/public URL are intentionally not hard-coded and can be configured later.
+Owner runtime configuration is available from Telegram without source edits/restart.
+
+## Current owner flow
+
+`/admin → settings/templates/status/diagnostics → edit/preview/reset → PostgreSQL + audit`
+
+Sensitive bootstrap values remain environment-only.
 
 ## Next exact step
 
-Create and implement `plans/0007-owner-control-center.md`.
-
-The owner/admin control center must make routine runtime configuration possible inside Telegram without editing source files or restarting CineGate.
+Create and implement `plans/0008-historical-archive-import-and-reindex.md`.
 
 Primary scope:
 
-1. owner-only authorization
-2. main settings dashboard
-3. message/template editor
-4. deletion duration
-5. search result limit + similarity threshold
-6. Archive Channel ID / owner notification chat
-7. public Mini App URL + AdsGram Block ID
-8. reward/session timing
-9. safe validation + preview/reset
-10. diagnostics for ambiguous/orphan archive groups and `delete_failed` deliveries
-11. audit trail for owner changes
-12. current Telegram formatting/styled button support
-13. tests and two review passes
+1. one-time UserBot historical migration
+2. Telethon 1.45.x as importer-only dependency
+3. separate CLI process; no long-running UserBot service
+4. owner-provided original source channel ID
+5. resumable source→Archive Channel transfer
+6. durable source→archive message mapping
+7. crash reconciliation before retry
+8. bounded batches and FloodWait handling
+9. bulk-import notification suppression
+10. sequential historical reindex using existing archive indexer
+11. progress + final summary
+12. large-history validation without loading media files
+13. session/API credentials never committed
+14. owner manually disables source content protection before import; CineGate does not bypass it
 
 ## Operational safety rules
 
 - Production webhook registration remains `max_connections=1` until durable global sequencing exists.
 - Production access logging must not expose the secret-bearing AdsGram Reward URL.
-- Telegram only allows deleting messages sent less than 48 hours ago; CineGate records `delete_failed` rather than pretending success if that window is lost.
+- UserBot session files are secrets and remain outside Git.
+- Historical importer must not download/re-upload movie media.
+- Source content protection must be disabled by an authorized owner before transfer; importer does not bypass it.
 
 ## Open decisions
 
 - [ ] production AdsGram Block ID/platform/public URL
-- [ ] UserBot library for one-time historical import
 - [ ] production hosting/deployment topology
-- [ ] exact owner Rich Message editor feature set
 - [ ] real-time archive edit/delete reconciliation
+- [ ] advanced Rich Message authoring
+- [ ] visual owner button-style customization
 - [ ] global webhook sequencer before concurrency > 1
 
 ## Active plan
 
-`plans/0006-reward-delivery-and-deletion.md` — **Completed**
+`plans/0007-owner-control-center.md` — **Completed**
 
 ## Blockers
 
-None for owner/admin control-center implementation.
+None for Plan 0008 implementation.
 
-Live AdsGram production testing requires the real Block ID/platform configuration, but the owner panel can be built first.
+Live historical transfer will later require:
+- Telegram API ID/hash
+- an authenticated UserBot session
+- owner access to both channels
+- original-channel forwarding restriction temporarily disabled
 
 ## Resume instruction
 
-Read `AGENTS.md`, `PROJECT_MEMORY.md`, this file, `docs/SECURITY.md`, and Plans 0002–0006 before starting Plan 0007.
+Read `AGENTS.md`, `PROJECT_MEMORY.md`, this file, `docs/SECURITY.md`, and Plans 0002–0007 before starting Plan 0008.
