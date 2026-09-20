@@ -7,6 +7,8 @@ _ENV_KEYS = (
     "CINEGATE_BOT_TOKEN",
     "CINEGATE_DATABASE_URL",
     "CINEGATE_WEBHOOK_SECRET",
+    "CINEGATE_ADSGRAM_CALLBACK_SECRET",
+    "CINEGATE_OWNER_USER_ID",
 )
 
 
@@ -79,3 +81,37 @@ def test_valid_adsgram_callback_secret_is_accepted(
     settings = SecretsSettings(_env_file=None)
 
     assert settings.adsgram_callback_secret is not None
+
+
+
+def test_owner_user_id_must_be_positive(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    clear_secret_env(monkeypatch)
+    monkeypatch.setenv("CINEGATE_BOT_TOKEN", "token")
+    monkeypatch.setenv(
+        "CINEGATE_DATABASE_URL",
+        "postgresql+asyncpg://user:password@localhost/cinegate",
+    )
+    monkeypatch.setenv("CINEGATE_WEBHOOK_SECRET", "valid_secret")
+    monkeypatch.setenv("CINEGATE_OWNER_USER_ID", "0")
+
+    with pytest.raises(ValidationError):
+        SecretsSettings(_env_file=None)
+
+
+def test_valid_owner_user_id_is_accepted(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    clear_secret_env(monkeypatch)
+    monkeypatch.setenv("CINEGATE_BOT_TOKEN", "token")
+    monkeypatch.setenv(
+        "CINEGATE_DATABASE_URL",
+        "postgresql+asyncpg://user:password@localhost/cinegate",
+    )
+    monkeypatch.setenv("CINEGATE_WEBHOOK_SECRET", "valid_secret")
+    monkeypatch.setenv("CINEGATE_OWNER_USER_ID", "123456789")
+
+    settings = SecretsSettings(_env_file=None)
+
+    assert settings.owner_user_id == 123456789
