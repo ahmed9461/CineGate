@@ -359,3 +359,73 @@ The complete user reward/delivery/deletion path exists. Production AdsGram exter
 ### Exact next step
 
 Create `plans/0007-owner-control-center.md` before implementing the owner-only runtime settings/template/diagnostics panel.
+
+
+---
+
+## 2026-09-20 — Owner control center completed
+
+### Plan
+
+- `plans/0007-owner-control-center.md` — completed
+
+### Implemented
+
+- owner bootstrap identity through environment configuration
+- owner-only `/admin` Telegram control center
+- durable owner edit sessions
+- admin audit history
+- typed setting/template registries
+- runtime setting edit/reset without restart
+- formatted Telegram template edit/preview/reset
+- Telegram entity persistence and UTF-16 offset remapping
+- formatted delivery captions with `caption_entities`
+- owner status + diagnostics
+- recent safe audit metadata
+- private-chat-only owner edit input
+- owner router ordered before general user routing
+- migration `0009`
+
+### Correctness/security review
+
+Found and fixed:
+
+- forged/non-owner callbacks must be silently ignored
+- owner edit input must never be accepted from group chats
+- arbitrary callback keys must not write arbitrary DB settings
+- invalid edits must leave the edit session active and perform no mutation
+- rapid duplicate edits require one transactional winner
+- same-value updates must not create audit noise
+- Telegram formatting boundaries cannot split template variables
+- template/output limits must count UTF-16 units, including emoji
+- stored formatting must be used during actual delivery, not merely persisted
+
+### Performance/complexity review
+
+Confirmed:
+
+- no Redis/FSM/cache service added
+- ordinary user traffic does not perform admin DB work
+- one durable edit row per owner
+- settings sections use batched reads
+- audit history is append-only
+- diagnostics lists are bounded
+- no extra deployment process/service was introduced
+
+### Verification
+
+GitHub Actions:
+
+- Ruff: passed
+- pytest: **176 passed**
+- PostgreSQL migrations `0001→0009`: passed
+- full downgrade to base + restore to head: passed
+- compileall: passed
+
+### Current stop point
+
+Owner runtime configuration is complete.
+
+### Exact next step
+
+Create `plans/0008-historical-archive-import-and-reindex.md` before implementing the one-time Telethon UserBot migration, durable resume mapping, bulk-import progress, and sequential historical reindex.
