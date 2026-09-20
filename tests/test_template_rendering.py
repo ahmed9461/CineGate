@@ -94,3 +94,14 @@ def test_rendered_length_limit_is_enforced() -> None:
             replacements={"%movie%": "x" * 11},
             max_length=10,
         )
+
+
+
+def test_template_limit_counts_utf16_units_for_emoji() -> None:
+    with pytest.raises(TemplateRenderError, match="UTF-16"):
+        validate_template_source(
+            body="🎬" * 6,
+            stored_entities=None,
+            allowed_variables=frozenset(),
+            max_length=10,
+        )
