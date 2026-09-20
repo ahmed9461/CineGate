@@ -366,3 +366,47 @@ async def test_write_permission_failure_does_not_advance_checkpoint(
     assert job.processed_messages == 0
     assert job.copied_messages == 0
     assert mapping_count == 0
+
+
+
+@pytest.mark.asyncio
+async def test_transfer_is_rejected_while_reindex_is_active(
+    database: Database,
+) -> None:
+    gateway = FakeGateway([source_message(1, text="one")])
+
+    async with database.session() as session, session.begin():
+        repository = ArchiveImportRepository(session)
+        job = await repository.get_or_create_job(
+            source_channel_id=SOURCE_ID,
+            archive_channel_id=ARCHIVE_ID,
+        )
+        await repository.initialize_snapshot(
+            job_id=job.id,
+            source_high_watermark_id=1,
+            archive_baseline_message_id=100,
+            source_total_estimate=1,
+        )
+        await repository.record_transfer_batch(
+            job_id=job.id,
+            processed_through_source_id=1,
+            processed_count=1,
+            skipped_count=0,
+            forwarded_mappings=((1, 101),),
+        )
+        await repository.mark_running(job.id)
+        await repository.mark_transferred(job.id)
+        await repository.mark_reindexing(job.id)
+
+    service = HistoricalImportService(
+        database=database,
+        gateway=gateway,  # type: ignore[arg-type]
+    )
+
+    with pytest.raises(HistoricalImportError, match="reindex is active"):
+        await service.transfer(
+            source_channel_id=SOURCE_ID,
+            archive_channel_id=ARCHIVE_ID,
+        )
+
+    assert gateway.forward_batches == []
