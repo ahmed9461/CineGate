@@ -280,6 +280,8 @@ async def test_stale_running_job_does_not_suppress_notifications_forever(
             archive_channel_id=ARCHIVE_ID,
         )
         await repository.mark_running(job.id)
+
+    async with database.session() as session, session.begin():
         await session.execute(
             text(
                 "UPDATE archive_import_jobs "
