@@ -6,6 +6,8 @@ from types import SimpleNamespace
 
 import pytest
 import pytest_asyncio
+from aiogram.enums import MessageEntityType
+from aiogram.types import MessageEntity
 from aiogram.exceptions import TelegramAPIError
 from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert
@@ -20,6 +22,7 @@ from cinegate.db.models import (
     UserSearchSession,
 )
 from cinegate.db.session import Database
+from cinegate.presentation.templates import serialize_entities
 from cinegate.services.delivery import DeliveryService
 from cinegate.services.reward_sessions import RewardSessionService
 
@@ -283,3 +286,38 @@ async def test_stale_sending_state_recovers_to_rewarded(setup) -> None:
     assert reward_row is not None
     assert reward_row.status == "rewarded"
     assert reward_row.delivery_started_at is None
+
+
+
+@pytest.mark.asyncio
+async def test_delivery_caption_entities_are_passed_to_copy_message(setup) -> None:
+    database, bot, delivery, reward, _quality_id = setup
+    body = "%movie% %quality%"
+    movie_token_len = len("%movie%".encode("utf-16-le")) // 2
+    entity = MessageEntity(
+        type=MessageEntityType.BOLD,
+        offset=0,
+        length=movie_token_len,
+    )
+
+    async with database.session() as session, session.begin():
+        session.add(
+            MessageTemplate(
+                key="delivery_caption",
+                body=body,
+                entities=serialize_entities([entity]),
+            )
+        )
+
+    result = await delivery.deliver(reward.id)
+
+    assert result.status == "delivered"
+    assert bot.copies
+    call = bot.copies[0]
+    assert call["caption"] == "Top Gun 720p"
+    assert call["caption_entities"] is not None
+    assert len(call["caption_entities"]) == 1
+    assert call["caption_entities"][0].type == MessageEntityType.BOLD
+    assert call["caption_entities"][0].length == (
+        len("Top Gun".encode("utf-16-le")) // 2
+    )
