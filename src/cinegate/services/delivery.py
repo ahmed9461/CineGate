@@ -5,19 +5,15 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from aiogram import Bot
+from aiogram.types import MessageEntity
 from aiogram.exceptions import TelegramAPIError
 from sqlalchemy import func, select, update
 
 from cinegate.db.models import Delivery, Movie, MovieQuality, RewardSession
 from cinegate.db.session import Database
 from cinegate.domain.delivery import DeliveryResult, DueDeletion, RewardNotReady
-from cinegate.presentation.delivery import (
-    DEFAULT_DELIVERY_CAPTION,
-    DeliveryTemplateError,
-    render_delivery_caption,
-)
 from cinegate.repositories.settings import SettingsRepository
-from cinegate.repositories.templates import MessageTemplateRepository
+from cinegate.services.templates import TemplateService
 
 _DEFAULT_DELETE_SECONDS = 120
 _MIN_DELETE_SECONDS = 5
@@ -33,15 +29,23 @@ class _PreparedDelivery:
     archive_channel_id: int
     archive_message_id: int
     caption: str
+    caption_entities: tuple[MessageEntity, ...]
     delete_seconds: int
 
 
 class DeliveryService:
     """Copy rewarded qualities and maintain durable deletion state."""
 
-    def __init__(self, database: Database, bot: Bot) -> None:
+    def __init__(
+        self,
+        database: Database,
+        bot: Bot,
+        *,
+        templates: TemplateService | None = None,
+    ) -> None:
         self._database = database
         self._bot = bot
+        self._templates = templates or TemplateService(database)
 
     async def deliver(self, reward_session_id: UUID) -> DeliveryResult:
         prepared_or_result = await self._prepare(reward_session_id)
@@ -55,6 +59,7 @@ class DeliveryService:
                 from_chat_id=prepared.archive_channel_id,
                 message_id=prepared.archive_message_id,
                 caption=prepared.caption,
+                caption_entities=list(prepared.caption_entities) or None,
                 protect_content=False,
             )
         except TelegramAPIError as exc:
@@ -117,26 +122,16 @@ class DeliveryService:
             delete_seconds = _bounded_delete_seconds(
                 settings.get("movie_delete_seconds")
             )
-            template = await MessageTemplateRepository(session).get_body(
-                "delivery_caption",
-                DEFAULT_DELIVERY_CAPTION,
+            rendered_caption = await self._templates.render_with_session(
+                session,
+                key="delivery_caption",
+                replacements={
+                    "%movie%": movie.display_title,
+                    "%year%": str(movie.year) if movie.year is not None else "",
+                    "%quality%": quality.quality,
+                    "%time%": f"{delete_seconds} ثانية",
+                },
             )
-            try:
-                caption = render_delivery_caption(
-                    template,
-                    movie=movie.display_title,
-                    year=movie.year,
-                    quality=quality.quality,
-                    delete_seconds=delete_seconds,
-                )
-            except DeliveryTemplateError:
-                caption = render_delivery_caption(
-                    DEFAULT_DELIVERY_CAPTION,
-                    movie=movie.display_title,
-                    year=movie.year,
-                    quality=quality.quality,
-                    delete_seconds=delete_seconds,
-                )
 
             if delivery is None:
                 delivery = Delivery(
@@ -172,7 +167,8 @@ class DeliveryService:
                 telegram_user_id=reward.telegram_user_id,
                 archive_channel_id=quality.archive_channel_id,
                 archive_message_id=quality.archive_message_id,
-                caption=caption,
+                caption=rendered_caption.text,
+                caption_entities=rendered_caption.entities,
                 delete_seconds=delete_seconds,
             )
 
