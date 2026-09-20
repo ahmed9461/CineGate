@@ -1,7 +1,7 @@
 # CineGate Product Specification
 
 **Status:** Initial confirmed specification.  
-**Last updated:** 2026-09-19
+**Last updated:** 2026-09-20
 
 ## Goal
 
@@ -51,10 +51,15 @@ After choosing a quality:
 
 ### Reward
 
+- AdsGram is the initial rewarded-ad integration
 - opening the ad page alone is insufficient
-- verified reward/completion is required
-- duplicate callbacks must be idempotent
+- client JavaScript alone is insufficient
+- production reward requires Telegram-signed Mini App completion plus AdsGram server Reward URL confirmation
+- duplicate callbacks are idempotent
 - reward cannot unlock unrelated content
+- only one active reward session is allowed per Telegram user because the provider server callback identifies the Telegram user rather than a CineGate session
+- provider-only confirmation does not skip the current ad
+- earned reward persists through Telegram delivery failure and does not expire with the original ad-session TTL
 
 ### Delivery
 
@@ -71,7 +76,10 @@ After verified reward:
 - only the delivered movie/file message is deleted automatically
 - poster/info is not deleted
 - deletion schedule survives service restarts
-- overdue pending deletions are reconciled after restart
+- overdue/stale delivery states are reconciled during runtime and after restart
+- transient failures use bounded retry/backoff
+- Telegram's 48-hour deletion window is respected
+- permanently impossible deletion is recorded as `delete_failed`, not falsely marked deleted
 
 ## Content architecture
 
@@ -172,11 +180,11 @@ Must handle safely:
 
 ## Not finalized
 
+- production AdsGram Block ID/platform/public URL values
+- production deployment topology and callback access-log redaction
 - real-time archive edit/delete reconciliation behavior
-- ad network
-- stack
-- database
-- deployment
-- Telegram libraries/API versions
+- historical UserBot import implementation
+- final Rich Message owner-editor feature set
+- durable global webhook sequencing before webhook concurrency is increased
 
 These must be decided through task plans and recorded in the decision log.
