@@ -340,3 +340,17 @@ async def test_client_then_provider_triggers_delivery(setup) -> None:
 
     assert provider.status_code == 204
     assert runtime.delivery.calls == [reward.id]
+
+
+
+@pytest.mark.asyncio
+async def test_adsgram_block_id_is_escaped_before_embedding_in_script(setup) -> None:
+    database, _runtime, reward, client = setup
+    malicious = "</script><script>alert(1)</script>"
+    await set_setting(database, "adsgram_block_id", malicious)
+
+    response = await client.get(f"/miniapp/reward/{reward.id}")
+
+    assert response.status_code == 200
+    assert malicious not in response.text
+    assert "\\u003c/script\\u003e" in response.text
