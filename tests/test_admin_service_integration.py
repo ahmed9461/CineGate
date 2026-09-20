@@ -294,3 +294,59 @@ async def test_concurrent_reset_records_single_effective_change(
         )
 
     assert reset_count == 1
+
+
+
+@pytest.mark.asyncio
+async def test_rapid_duplicate_edit_submission_has_single_winner(
+    database: Database,
+) -> None:
+    service = OwnerAdminService(database)
+    await service.begin_edit(
+        owner_user_id=OWNER_ID,
+        edit_kind="setting",
+        target_key="search_result_limit",
+    )
+
+    first, second = await asyncio.gather(
+        service.apply_setting_edit(
+            owner_user_id=OWNER_ID,
+            raw_value="9",
+        ),
+        service.apply_setting_edit(
+            owner_user_id=OWNER_ID,
+            raw_value="9",
+        ),
+        return_exceptions=True,
+    )
+
+    successes = [
+        result
+        for result in (first, second)
+        if not isinstance(result, Exception)
+    ]
+    failures = [
+        result
+        for result in (first, second)
+        if isinstance(result, Exception)
+    ]
+
+    assert len(successes) == 1
+    assert successes[0].changed
+    assert len(failures) == 1
+    assert isinstance(failures[0], AdminValidationError)
+
+    async with database.session() as session:
+        audit_count = await session.scalar(
+            select(func.count(AdminAuditLog.id)).where(
+                AdminAuditLog.target_key == "search_result_limit"
+            )
+        )
+        value = await session.scalar(
+            select(AppSetting.value).where(
+                AppSetting.key == "search_result_limit"
+            )
+        )
+
+    assert audit_count == 1
+    assert value == 9
