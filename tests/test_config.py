@@ -42,3 +42,40 @@ def test_valid_secret_configuration(monkeypatch: pytest.MonkeyPatch) -> None:
 
     settings = SecretsSettings(_env_file=None)
     assert settings.webhook_secret.get_secret_value() == "valid_secret-123"
+
+
+
+def test_short_adsgram_callback_secret_is_rejected(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    clear_secret_env(monkeypatch)
+    monkeypatch.setenv("CINEGATE_BOT_TOKEN", "token")
+    monkeypatch.setenv(
+        "CINEGATE_DATABASE_URL",
+        "postgresql+asyncpg://user:password@localhost/cinegate",
+    )
+    monkeypatch.setenv("CINEGATE_WEBHOOK_SECRET", "valid_secret")
+    monkeypatch.setenv("CINEGATE_ADSGRAM_CALLBACK_SECRET", "too-short")
+
+    with pytest.raises(ValidationError):
+        SecretsSettings(_env_file=None)
+
+
+def test_valid_adsgram_callback_secret_is_accepted(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    clear_secret_env(monkeypatch)
+    monkeypatch.setenv("CINEGATE_BOT_TOKEN", "token")
+    monkeypatch.setenv(
+        "CINEGATE_DATABASE_URL",
+        "postgresql+asyncpg://user:password@localhost/cinegate",
+    )
+    monkeypatch.setenv("CINEGATE_WEBHOOK_SECRET", "valid_secret")
+    monkeypatch.setenv(
+        "CINEGATE_ADSGRAM_CALLBACK_SECRET",
+        "safe_callback_secret_abcdefghijklmnopqrstuvwxyz012345",
+    )
+
+    settings = SecretsSettings(_env_file=None)
+
+    assert settings.adsgram_callback_secret is not None
