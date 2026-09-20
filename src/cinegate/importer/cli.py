@@ -181,6 +181,12 @@ async def _run_or_transfer(
         source_arg=args.source,
         archive_arg=args.archive,
     )
+    if args.command == "run":
+        await _ensure_runtime_archive_matches(
+            database,
+            archive_channel_id,
+        )
+
     reporter = await _build_reporter(database)
     try:
         service = HistoricalImportService(
@@ -278,6 +284,21 @@ async def _status(database: Database, args) -> int:
             f"last_reindexed={job.last_reindexed_source_message_id}"
         )
     return 0
+
+
+async def _ensure_runtime_archive_matches(
+    database: Database,
+    archive_channel_id: int,
+) -> None:
+    async with database.session() as session:
+        configured = await SettingsRepository(session).get_int(
+            "archive_channel_id"
+        )
+    if configured != archive_channel_id:
+        raise HistoricalImportError(
+            "run requires archive_channel_id runtime setting to match "
+            "the selected Archive Channel before transfer begins"
+        )
 
 
 async def _resolve_pair(
