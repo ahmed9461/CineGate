@@ -15,6 +15,7 @@ from cinegate.db.models import (
     MovieQuality,
 )
 from cinegate.db.session import Database
+from cinegate.importer.adapter import telethon_message_to_archive
 from cinegate.importer.service import HistoricalImportService
 from cinegate.repositories.import_jobs import ArchiveImportRepository
 from cinegate.repositories.settings import SettingsRepository
@@ -291,19 +292,14 @@ async def test_existing_live_index_rows_are_not_duplicated(
         text="Existing 2025 #720p",
     )
 
-    await ArchiveIndexService(database).ingest(
+    indexer = ArchiveIndexService(database)
+    await indexer.ingest(
         channel_id=ARCHIVE_ID,
-        message=__import__(
-            "cinegate.importer.adapter",
-            fromlist=["telethon_message_to_archive"],
-        ).telethon_message_to_archive(poster),
+        message=telethon_message_to_archive(poster),
     )
-    await ArchiveIndexService(database).ingest(
+    await indexer.ingest(
         channel_id=ARCHIVE_ID,
-        message=__import__(
-            "cinegate.importer.adapter",
-            fromlist=["telethon_message_to_archive"],
-        ).telethon_message_to_archive(quality),
+        message=telethon_message_to_archive(quality),
     )
 
     gateway = ReindexGateway(
