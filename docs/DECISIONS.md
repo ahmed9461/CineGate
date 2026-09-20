@@ -302,10 +302,70 @@ Redis/Celery/message brokers remain unnecessary for the current workload.
 
 ---
 
+## D-028 — Owner identity is bootstrap configuration
+
+**Status:** Accepted  
+**Date:** 2026-09-20
+
+The authorized owner Telegram user ID is supplied through `CINEGATE_OWNER_USER_ID` and is not editable from the owner panel itself.
+
+**Reason:** The control plane must not be able to redefine who controls the control plane.
+
+---
+
+## D-029 — Owner edit state and audit are durable PostgreSQL data
+
+**Status:** Accepted  
+**Date:** 2026-09-20
+
+Owner edits use one durable `owner_edit_sessions` row and successful setting/template changes are appended to `admin_audit_log`.
+
+Mutations are serialized per owner with PostgreSQL transaction advisory locking.
+
+**Reason:** Restart-safe edits and idempotent rapid-click behavior do not require Redis or an in-memory FSM.
+
+---
+
+## D-030 — Formatted templates store Telegram entities, not markup source
+
+**Status:** Accepted  
+**Date:** 2026-09-20
+
+The owner edits templates by sending normal formatted Telegram messages. CineGate stores the message body plus Telegram entities and safely remaps UTF-16 offsets when variables are replaced.
+
+Raw HTML/Markdown syntax is not required from the owner.
+
+Advanced raw Rich Message JSON authoring is deferred to a dedicated later phase.
+
+---
+
+## D-031 — Telethon 1.45.x is the historical-import client
+
+**Status:** Accepted  
+**Date:** 2026-09-20
+
+The one-time historical Archive migration uses Telethon 1.45.x as an **optional importer-only dependency**.
+
+The UserBot importer runs as a separate CLI process and is not part of the long-running bot/web service.
+
+**Reason:** Telethon 1.45.0 is the latest stable v1 release verified during Plan 0008 planning, supports async history iteration/forwarding, and avoids adding a persistent UserBot process to normal operation.
+
+---
+
+## D-032 — Historical import does not bypass content protection
+
+**Status:** Accepted  
+**Date:** 2026-09-20
+
+The owner must temporarily disable source-channel forwarding protection before migration.
+
+The importer detects/reports restricted forwarding and stops safely. It does not toggle, evade, or bypass Telegram content protection.
+
+---
+
 # Pending decisions
 
 - Production AdsGram credentials/platform values
-- UserBot implementation library
 - Hosting/deployment model
 - Telegram Bot API/client feature versions
 - Real-time archive edit/delete reconciliation behavior
