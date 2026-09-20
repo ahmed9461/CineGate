@@ -139,9 +139,6 @@ async def test_progress_uses_one_rate_limited_owner_message(database: Database) 
 
 
 def test_final_progress_text_contains_all_import_counters() -> None:
-    from cinegate.repositories.import_jobs import ImportJobSnapshot
-    from uuid import UUID
-
     job = ImportJobSnapshot(
         id=UUID("00000000-0000-0000-0000-000000000001"),
         source_channel_id=SOURCE_ID,
