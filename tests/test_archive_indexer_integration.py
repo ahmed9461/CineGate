@@ -9,8 +9,8 @@ import pytest_asyncio
 from sqlalchemy import delete, func, select
 
 from cinegate.db.models import (
-    Delivery,
     AppSetting,
+    Delivery,
     MessageTemplate,
     Movie,
     MovieQuality,
