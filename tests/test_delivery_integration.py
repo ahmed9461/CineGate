@@ -7,8 +7,8 @@ from types import SimpleNamespace
 import pytest
 import pytest_asyncio
 from aiogram.enums import MessageEntityType
-from aiogram.types import MessageEntity
 from aiogram.exceptions import TelegramAPIError
+from aiogram.types import MessageEntity
 from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert
 
