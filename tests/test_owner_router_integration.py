@@ -5,11 +5,16 @@ from types import SimpleNamespace
 
 import pytest
 import pytest_asyncio
+from aiogram.enums import MessageEntityType
+from aiogram.types import MessageEntity
 from sqlalchemy import delete, func, select
 
 from cinegate.admin.diagnostics import AdminDiagnosticsService
 from cinegate.admin.service import OwnerAdminService
-from cinegate.bot.admin_callbacks import AdminSettingCallback
+from cinegate.bot.admin_callbacks import (
+    AdminSettingCallback,
+    AdminTemplateCallback,
+)
 from cinegate.bot.owner_router import build_owner_router
 from cinegate.db.models import (
     AdminAuditLog,
@@ -72,11 +77,11 @@ class FakeBot:
 
 
 class FakeEditMessage:
-    def __init__(self, text: str) -> None:
+    def __init__(self, text: str, entities=None) -> None:
         self.from_user = SimpleNamespace(id=OWNER_ID)
         self.text = text
         self.caption = None
-        self.entities = None
+        self.entities = entities
         self.caption_entities = None
         self.answers = []
 
@@ -187,3 +192,121 @@ async def test_invalid_owner_edit_keeps_session_and_requests_correction(
 
     assert setting is None
     assert audit_count == 0
+
+
+
+@pytest.mark.asyncio
+async def test_template_edit_preview_and_reset_preserve_formatting(
+    database: Database,
+) -> None:
+    admin = OwnerAdminService(database)
+    templates = TemplateService(database)
+    router = build_owner_router(
+        owner_user_id=OWNER_ID,
+        admin=admin,
+        diagnostics=AdminDiagnosticsService(database),
+        templates=templates,
+    )
+    bot = FakeBot()
+
+    template_handler = handler(router, "callback_query", "admin_template")
+    edit_handler = handler(router, "message", "owner_edit_input")
+
+    callback = FakeCallback()
+    await template_handler(
+        callback,
+        callback_data=AdminTemplateCallback(
+            action="edit",
+            key="search_results",
+        ),
+        bot=bot,
+    )
+
+    edit = await admin.get_edit(OWNER_ID)
+    assert edit is not None
+    body = "وجدنا %count% نتيجة"
+    prefix_units = len("وجدنا ".encode("utf-16-le")) // 2
+    token_units = len("%count%".encode("utf-16-le")) // 2
+    entity = MessageEntity(
+        type=MessageEntityType.BOLD,
+        offset=prefix_units,
+        length=token_units,
+    )
+
+    message = FakeEditMessage(body, entities=[entity])
+    await edit_handler(message, owner_edit=edit)
+
+    stored = await admin.get_template_effective("search_results")
+    assert stored.body == body
+    assert stored.entities is not None
+
+    preview_callback = FakeCallback()
+    await template_handler(
+        preview_callback,
+        callback_data=AdminTemplateCallback(
+            action="preview",
+            key="search_results",
+        ),
+        bot=bot,
+    )
+
+    preview = bot.sent[-1]
+    assert preview.text == "وجدنا 3 نتيجة"
+    assert preview.entities is not None
+    assert len(preview.entities) == 1
+    assert preview.entities[0].type == MessageEntityType.BOLD
+    assert preview.entities[0].length == 1
+
+    reset_callback = FakeCallback()
+    await template_handler(
+        reset_callback,
+        callback_data=AdminTemplateCallback(
+            action="reset",
+            key="search_results",
+        ),
+        bot=bot,
+    )
+
+    reset = await admin.get_template_effective("search_results")
+    assert "وجدنا %count% نتائج بحث" in reset.body
+    assert reset.entities is None
+
+    async with database.session() as session:
+        audits = (
+            await session.execute(
+                select(AdminAuditLog)
+                .where(AdminAuditLog.target_key == "search_results")
+                .order_by(AdminAuditLog.id)
+            )
+        ).scalars().all()
+
+    assert [audit.action for audit in audits] == ["set", "reset"]
+
+
+@pytest.mark.asyncio
+async def test_template_preview_uses_default_when_no_custom_template(
+    database: Database,
+) -> None:
+    admin = OwnerAdminService(database)
+    router = build_owner_router(
+        owner_user_id=OWNER_ID,
+        admin=admin,
+        diagnostics=AdminDiagnosticsService(database),
+        templates=TemplateService(database),
+    )
+    bot = FakeBot()
+
+    template_handler = handler(router, "callback_query", "admin_template")
+    callback = FakeCallback()
+    await template_handler(
+        callback,
+        callback_data=AdminTemplateCallback(
+            action="preview",
+            key="reward_prompt",
+        ),
+        bot=bot,
+    )
+
+    assert bot.sent
+    assert "Interstellar" in bot.sent[-1].text
+    assert "1080p" in bot.sent[-1].text
