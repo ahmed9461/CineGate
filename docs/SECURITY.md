@@ -132,3 +132,50 @@ Never commit:
 - AdsGram callback secret
 - Telegram UserBot session files
 - private keys or certificates containing secrets
+
+
+## Historical UserBot importer
+
+The historical importer is a one-time operational tool and does not run inside the normal CineGate service.
+
+Secrets/bootstrap:
+
+- `CINEGATE_TELEGRAM_API_ID`
+- `CINEGATE_TELEGRAM_API_HASH`
+- Telethon `.session` / `.session-journal` files
+
+Requirements:
+
+- never commit UserBot session material
+- never log API hash, login codes, 2FA password, or session contents
+- keep the default session under the ignored `sessions/` path
+- custom session locations remain the operator's responsibility, though `*.session` and `*.session-journal` are ignored globally
+- run UserBot auth/import only from a trusted machine/server account
+- disconnect the UserBot after each CLI command
+
+Content protection:
+
+- CineGate does not bypass Telegram content protection
+- the authorized owner must temporarily disable source-channel forwarding protection before migration
+- the Archive Channel itself must also have content protection disabled, because CineGate later uses Bot API `copyMessage` to deliver media to users
+- if Telegram reports protected forwarding, the importer pauses/stops rather than attempting a workaround
+
+Media handling:
+
+- the importer forwards Telegram messages server-side
+- it does not call `download_media`
+- it does not materialize movie files on the CineGate host
+- source→archive message references/checkpoints are the durable state, not file bytes
+
+Crash/retry model:
+
+- Telegram forwarding and PostgreSQL mapping commit are separate systems
+- if Telegram forwards successfully and the process dies before DB commit, the next run reconciles Archive forward metadata before forwarding more data
+- importer state/mapping is idempotent and protected by a PostgreSQL advisory lock per source/archive pair
+- historical mappings suppress late per-film owner notifications even after the import has completed
+- progress reporting is best-effort and must never stop the transfer itself
+
+Operational note:
+
+- `verify` is read-only with respect to Telegram and checks stored mappings against Archive forward metadata
+- `status` requires only PostgreSQL and does not require Telegram API credentials
