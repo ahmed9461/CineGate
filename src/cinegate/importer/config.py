@@ -23,9 +23,7 @@ class ImporterDatabaseSettings(_ImporterBaseSettings):
     @field_validator("database_url")
     @classmethod
     def validate_database_url(cls, value: SecretStr) -> SecretStr:
-        if not value.get_secret_value().startswith("postgresql+asyncpg://"):
-            raise ValueError("database_url must use postgresql+asyncpg")
-        return value
+        return _validate_database_url(value)
 
 
 class ImporterTelegramSettings(_ImporterBaseSettings):
@@ -35,16 +33,12 @@ class ImporterTelegramSettings(_ImporterBaseSettings):
     @field_validator("telegram_api_id")
     @classmethod
     def validate_api_id(cls, value: int) -> int:
-        if value <= 0:
-            raise ValueError("telegram_api_id must be positive")
-        return value
+        return _validate_api_id(value)
 
     @field_validator("telegram_api_hash")
     @classmethod
     def validate_api_hash(cls, value: SecretStr) -> SecretStr:
-        if not _API_HASH_RE.fullmatch(value.get_secret_value()):
-            raise ValueError("telegram_api_hash must be a 32-character hex value")
-        return value
+        return _validate_api_hash(value)
 
 
 class ImporterSettings(_ImporterBaseSettings):
@@ -54,18 +48,41 @@ class ImporterSettings(_ImporterBaseSettings):
     telegram_api_id: int
     telegram_api_hash: SecretStr
 
-    _database_validator = field_validator("database_url")(
-        ImporterDatabaseSettings.validate_database_url.__func__
-    )
-    _api_id_validator = field_validator("telegram_api_id")(
-        ImporterTelegramSettings.validate_api_id.__func__
-    )
-    _api_hash_validator = field_validator("telegram_api_hash")(
-        ImporterTelegramSettings.validate_api_hash.__func__
-    )
+    @field_validator("database_url")
+    @classmethod
+    def validate_database_url(cls, value: SecretStr) -> SecretStr:
+        return _validate_database_url(value)
+
+    @field_validator("telegram_api_id")
+    @classmethod
+    def validate_api_id(cls, value: int) -> int:
+        return _validate_api_id(value)
+
+    @field_validator("telegram_api_hash")
+    @classmethod
+    def validate_api_hash(cls, value: SecretStr) -> SecretStr:
+        return _validate_api_hash(value)
 
 
 class ImporterProgressSettings(_ImporterBaseSettings):
     """Optional Bot API credential used only for owner progress reporting."""
 
     bot_token: SecretStr | None = None
+
+
+def _validate_database_url(value: SecretStr) -> SecretStr:
+    if not value.get_secret_value().startswith("postgresql+asyncpg://"):
+        raise ValueError("database_url must use postgresql+asyncpg")
+    return value
+
+
+def _validate_api_id(value: int) -> int:
+    if value <= 0:
+        raise ValueError("telegram_api_id must be positive")
+    return value
+
+
+def _validate_api_hash(value: SecretStr) -> SecretStr:
+    if not _API_HASH_RE.fullmatch(value.get_secret_value()):
+        raise ValueError("telegram_api_hash must be a 32-character hex value")
+    return value
