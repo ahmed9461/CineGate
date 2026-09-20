@@ -112,3 +112,19 @@ def test_forward_without_original_channel_post_is_ignored() -> None:
         )
         is None
     )
+
+
+
+def test_telegram_message_empty_is_not_importable(
+    monkeypatch,
+) -> None:
+    class FakeMessageEmpty:
+        def __init__(self) -> None:
+            self.id = 99
+
+    monkeypatch.setattr(
+        "cinegate.importer.adapter.MessageEmpty",
+        FakeMessageEmpty,
+    )
+
+    assert not is_importable_message(FakeMessageEmpty())
