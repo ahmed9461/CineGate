@@ -493,5 +493,8 @@ class HistoricalImportService:
 
 
 def _require_strictly_increasing(values: tuple[int, ...], label: str) -> None:
-    if any(left >= right for left, right in zip(values, values[1:])):
+    if any(
+        left >= right
+        for left, right in zip(values, values[1:], strict=False)
+    ):
         raise HistoricalImportError(f"{label} are not strictly increasing")
