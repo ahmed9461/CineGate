@@ -27,7 +27,11 @@ class FakeRuntime:
         self.settings = SimpleNamespace(webhook_secret=SecretStr("webhook-secret"))
         self.bot = object()
         self.dispatcher = FakeDispatcher()
+        self.started = False
         self.closed = False
+
+    async def start(self) -> None:
+        self.started = True
 
     async def close(self) -> None:
         self.closed = True
@@ -42,6 +46,7 @@ def test_health_endpoint_and_runtime_shutdown() -> None:
 
     with client_for(runtime) as client:
         response = client.get("/healthz")
+        assert runtime.started
         assert not runtime.closed
 
     assert response.status_code == 200
