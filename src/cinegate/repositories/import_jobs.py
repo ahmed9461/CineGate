@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from cinegate.db.models import ArchiveImportJob, ArchiveImportMessageMap
 
-_ACTIVE_BULK_STATUSES = ("running", "paused", "transferred", "reindexing")
+_ACTIVE_BULK_STATUSES = ("running", "reindexing")
 
 
 @dataclass(frozen=True, slots=True)
