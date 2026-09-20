@@ -3,6 +3,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
+from aiogram.enums import ChatType
 
 from cinegate.admin.service import EditSessionView
 from cinegate.bot.admin_callbacks import AdminPageCallback
@@ -60,8 +61,14 @@ class FakeTemplates:
 
 
 class FakeMessage:
-    def __init__(self, user_id: int) -> None:
+    def __init__(
+        self,
+        user_id: int,
+        *,
+        chat_type: ChatType = ChatType.PRIVATE,
+    ) -> None:
         self.from_user = SimpleNamespace(id=user_id)
+        self.chat = SimpleNamespace(type=chat_type)
         self.answers = []
 
     async def answer(self, text: str, **kwargs):
@@ -194,3 +201,27 @@ def test_owner_router_is_empty_when_owner_is_not_bootstrapped() -> None:
 
     assert router.message.handlers == []
     assert router.callback_query.handlers == []
+
+
+
+@pytest.mark.asyncio
+async def test_owner_edit_filter_ignores_owner_messages_outside_private_chat() -> None:
+    admin = FakeAdmin()
+    admin.edit = EditSessionView(
+        owner_user_id=OWNER_ID,
+        edit_kind="setting",
+        target_key="search_result_limit",
+    )
+    edit_filter = ActiveOwnerEditFilter(
+        owner_user_id=OWNER_ID,
+        admin=admin,  # type: ignore[arg-type]
+    )
+
+    result = await edit_filter(
+        FakeMessage(
+            OWNER_ID,
+            chat_type=ChatType.GROUP,
+        )
+    )
+
+    assert result is False
