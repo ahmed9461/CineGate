@@ -101,6 +101,11 @@ class HistoricalTelegramGateway:
                 "source channel forwarding protection is enabled; "
                 "disable it temporarily as the authorized owner and resume"
             )
+        if bool(getattr(archive, "noforwards", False)):
+            raise ImportChannelAccessError(
+                "Archive Channel content protection must be disabled so "
+                "CineGate can later copy movie files to users"
+            )
 
         return source, archive
 
