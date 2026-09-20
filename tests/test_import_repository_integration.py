@@ -247,3 +247,19 @@ async def test_second_importer_for_same_pair_fails_fast(database: Database) -> N
     finally:
         release.set()
         await first
+
+
+
+@pytest.mark.asyncio
+async def test_invalid_import_status_transition_is_rejected(
+    database: Database,
+) -> None:
+    async with database.session() as session, session.begin():
+        repository = ArchiveImportRepository(session)
+        job = await repository.get_or_create_job(
+            source_channel_id=SOURCE_ID,
+            archive_channel_id=ARCHIVE_ID,
+        )
+
+        with pytest.raises(RuntimeError, match="invalid import status transition"):
+            await repository.mark_completed(job.id)
