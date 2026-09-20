@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy import func, select, update
@@ -118,7 +118,7 @@ class ArchiveImportRepository:
     async def mark_running(self, job_id: UUID) -> ImportJobSnapshot:
         job = await self._require_job(job_id, lock=True)
         job.status = "running"
-        job.started_at = job.started_at or func.now()
+        job.started_at = job.started_at or datetime.now(UTC)
         job.completed_at = None
         job.last_error = None
         return _snapshot(job)
@@ -150,7 +150,7 @@ class ArchiveImportRepository:
     async def mark_completed(self, job_id: UUID) -> ImportJobSnapshot:
         job = await self._require_job(job_id, lock=True)
         job.status = "completed"
-        job.completed_at = func.now()
+        job.completed_at = datetime.now(UTC)
         job.last_error = None
         return _snapshot(job)
 
@@ -267,7 +267,7 @@ class ArchiveImportRepository:
             raise RuntimeError("import mapping disappeared during reindex")
 
         if not missing and mapping.reindexed_at is None:
-            mapping.reindexed_at = func.now()
+            mapping.reindexed_at = datetime.now(UTC)
             job.reindexed_messages += 1
         elif missing:
             job.missing_archive_messages += 1
