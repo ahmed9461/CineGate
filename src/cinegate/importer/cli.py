@@ -316,18 +316,17 @@ async def _resolve_pair(
 
 
 async def _resolve_job(database: Database, args):
-    async with database.session() as session:
-        repository = ArchiveImportRepository(session)
-
-        if args.job is not None:
-            job = await repository.get_job(args.job)
-        else:
-            source_channel_id, archive_channel_id = await _resolve_pair(
-                database=database,
-                source_arg=args.source,
-                archive_arg=args.archive,
-            )
-            job = await repository.get_job_by_pair(
+    if args.job is not None:
+        async with database.session() as session:
+            job = await ArchiveImportRepository(session).get_job(args.job)
+    else:
+        source_channel_id, archive_channel_id = await _resolve_pair(
+            database=database,
+            source_arg=args.source,
+            archive_arg=args.archive,
+        )
+        async with database.session() as session:
+            job = await ArchiveImportRepository(session).get_job_by_pair(
                 source_channel_id=source_channel_id,
                 archive_channel_id=archive_channel_id,
             )
