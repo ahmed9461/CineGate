@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 import pytest_asyncio
@@ -183,7 +183,7 @@ async def test_expired_session_allows_new_reward(reward_setup) -> None:
         await session.execute(
             update(RewardSession)
             .where(RewardSession.id == old.id)
-            .values(expires_at=datetime.now(timezone.utc) - timedelta(seconds=1))
+            .values(expires_at=datetime.now(UTC) - timedelta(seconds=1))
         )
 
     with pytest.raises(RewardSessionExpired):
