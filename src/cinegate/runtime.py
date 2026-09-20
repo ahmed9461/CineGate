@@ -75,7 +75,13 @@ def build_runtime(settings: SecretsSettings | None = None) -> AppRuntime:
     )
 
     dispatcher = Dispatcher()
-    dispatcher.include_router(build_archive_router(indexer, notifier))
+    dispatcher.include_router(
+        build_archive_router(
+            indexer,
+            notifier,
+            database=database,
+        )
+    )
     dispatcher.include_router(
         build_owner_router(
             owner_user_id=settings.owner_user_id,
