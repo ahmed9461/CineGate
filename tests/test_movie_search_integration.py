@@ -8,9 +8,11 @@ from sqlalchemy import delete, func, select, text
 
 from cinegate.db.models import (
     AppSetting,
+    Delivery,
     MessageTemplate,
     Movie,
     MovieQuality,
+    RewardSession,
     UserSearchSession,
 )
 from cinegate.db.session import Database
@@ -24,6 +26,8 @@ ARCHIVE_CHANNEL_ID = -1001234567890
 
 async def clean_database(database: Database) -> None:
     async with database.session() as session, session.begin():
+        await session.execute(delete(Delivery))
+        await session.execute(delete(RewardSession))
         await session.execute(delete(UserSearchSession))
         await session.execute(delete(MovieQuality))
         await session.execute(delete(Movie))
