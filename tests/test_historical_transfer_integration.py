@@ -410,3 +410,89 @@ async def test_transfer_is_rejected_while_reindex_is_active(
         )
 
     assert gateway.forward_batches == []
+
+
+
+@pytest.mark.asyncio
+async def test_snapshot_high_watermark_excludes_newer_source_messages(
+    database: Database,
+) -> None:
+    gateway = FakeGateway(
+        [
+            source_message(1, text="one"),
+            source_message(2, text="two"),
+            source_message(3, text="arrived later"),
+        ]
+    )
+
+    async with database.session() as session, session.begin():
+        repository = ArchiveImportRepository(session)
+        job = await repository.get_or_create_job(
+            source_channel_id=SOURCE_ID,
+            archive_channel_id=ARCHIVE_ID,
+        )
+        await repository.initialize_snapshot(
+            job_id=job.id,
+            source_high_watermark_id=2,
+            archive_baseline_message_id=100,
+            source_total_estimate=2,
+        )
+
+    service = HistoricalImportService(
+        database=database,
+        gateway=gateway,  # type: ignore[arg-type]
+        batch_size=10,
+    )
+
+    transferred = await service.transfer(
+        source_channel_id=SOURCE_ID,
+        archive_channel_id=ARCHIVE_ID,
+    )
+
+    assert transferred.source_high_watermark_id == 2
+    assert transferred.last_copied_source_message_id == 2
+    assert gateway.forward_batches == [(1, 2)]
+
+
+@pytest.mark.asyncio
+async def test_nonmonotonic_destination_ids_pause_without_checkpoint(
+    database: Database,
+) -> None:
+    class NonMonotonicGateway(FakeGateway):
+        async def forward_batch(self, *, source, archive, messages):
+            self.forward_batches.append(tuple(message.id for message in messages))
+            return (
+                SimpleNamespace(id=102),
+                SimpleNamespace(id=101),
+            )
+
+    gateway = NonMonotonicGateway(
+        [
+            source_message(1, text="one"),
+            source_message(2, text="two"),
+        ]
+    )
+    service = HistoricalImportService(
+        database=database,
+        gateway=gateway,  # type: ignore[arg-type]
+        batch_size=2,
+    )
+
+    with pytest.raises(HistoricalImportError, match="strictly increasing"):
+        await service.transfer(
+            source_channel_id=SOURCE_ID,
+            archive_channel_id=ARCHIVE_ID,
+        )
+
+    async with database.session() as session:
+        repository = ArchiveImportRepository(session)
+        job = await repository.get_job_by_pair(
+            source_channel_id=SOURCE_ID,
+            archive_channel_id=ARCHIVE_ID,
+        )
+        assert job is not None
+        mapping_count = await repository.count_mappings(job.id)
+
+    assert job.status == "paused"
+    assert job.last_copied_source_message_id == 0
+    assert mapping_count == 0
