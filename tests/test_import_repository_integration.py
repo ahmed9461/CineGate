@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 import pytest_asyncio
-from sqlalchemy import delete, update
+from sqlalchemy import delete, text
 
 from cinegate.db.models import ArchiveImportJob, ArchiveImportMessageMap
 from cinegate.db.session import Database
@@ -214,6 +214,8 @@ async def test_bulk_notification_suppression_only_for_active_work(
 
     async with database.session() as session, session.begin():
         repository = ArchiveImportRepository(session)
+        await repository.mark_running(job.id)
+        await repository.mark_transferred(job.id)
         await repository.mark_reindexing(job.id)
 
     async with database.session() as session:
@@ -279,9 +281,15 @@ async def test_stale_running_job_does_not_suppress_notifications_forever(
         )
         await repository.mark_running(job.id)
         await session.execute(
-            update(ArchiveImportJob)
-            .where(ArchiveImportJob.id == job.id)
-            .values(updated_at=datetime.now(UTC) - timedelta(minutes=31))
+            text(
+                "UPDATE archive_import_jobs "
+                "SET updated_at = :updated_at "
+                "WHERE id = :job_id"
+            ),
+            {
+                "updated_at": datetime.now(UTC) - timedelta(minutes=31),
+                "job_id": job.id,
+            },
         )
 
     async with database.session() as session:
