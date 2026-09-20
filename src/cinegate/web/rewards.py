@@ -198,7 +198,15 @@ def _reward_page_html(
     const rewardStatus = {reward_status_json};
     const button = document.getElementById("watch");
     const statusBox = document.getElementById("status");
-    const controller = window.Adsgram.init({{ blockId }});
+    const needsAd = (
+      rewardStatus === "pending"
+      || rewardStatus === "provider_confirmed"
+    );
+    const controller = (
+      needsAd
+        ? window.Adsgram.init({{ blockId }})
+        : null
+    );
 
     const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -232,22 +240,40 @@ def _reward_page_html(
       throw new Error("تأخر تأكيد الإعلان. ارجع للبوت وحاول فتح الطلب نفسه لاحقًا.");
     }}
 
-    button.addEventListener("click", async () => {{
+    async function continueExistingReward() {{
       button.disabled = true;
-      statusBox.textContent = "جاري تحميل الإعلان...";
+      button.textContent = "استكمال الطلب";
+      statusBox.textContent = "جاري التحقق والتسليم...";
       try {{
-        await controller.show();
-        statusBox.textContent = "تمت المشاهدة، جاري التحقق...";
         await claimUntilReady();
       }} catch (error) {{
-        statusBox.textContent = error?.message || "تعذر إكمال الإعلان. حاول مرة أخرى.";
+        statusBox.textContent = error?.message || "تعذر إكمال الطلب. حاول مرة أخرى.";
         button.disabled = false;
       }}
-    }});
+    }}
+
+    if (rewardStatus === "delivered") {{
+      button.hidden = true;
+      statusBox.textContent = "✅ تم إرسال الفيلم بالفعل.";
+    }} else if (!needsAd) {{
+      continueExistingReward();
+    }} else {{
+      button.addEventListener("click", async () => {{
+        button.disabled = true;
+        statusBox.textContent = "جاري تحميل الإعلان...";
+        try {{
+          await controller.show();
+          statusBox.textContent = "تمت المشاهدة، جاري التحقق...";
+          await claimUntilReady();
+        }} catch (error) {{
+          statusBox.textContent = error?.message || "تعذر إكمال الإعلان. حاول مرة أخرى.";
+          button.disabled = false;
+        }}
+      }});
+    }}
   </script>
 </body>
 </html>"""
-
 
 def _json_for_script(value: str) -> str:
     return (
