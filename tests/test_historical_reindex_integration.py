@@ -101,6 +101,7 @@ async def seed_job_and_mappings(database: Database):
             job_id=job.id,
             mappings=((1, 101), (2, 102), (3, 103)),
         )
+        await repository.mark_running(job.id)
         await repository.mark_transferred(job.id)
         return job.id
 
