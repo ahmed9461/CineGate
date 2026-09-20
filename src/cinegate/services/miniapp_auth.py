@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from aiogram.utils.web_app import safe_parse_webapp_init_data
 
@@ -32,11 +32,11 @@ def validate_miniapp_user(
     if parsed.auth_date is None:
         raise MiniAppAuthError("Telegram Mini App auth_date is missing")
 
-    current = now or datetime.now(timezone.utc)
+    current = now or datetime.now(UTC)
     auth_date = parsed.auth_date
     if isinstance(auth_date, datetime):
         if auth_date.tzinfo is None:
-            auth_date = auth_date.replace(tzinfo=timezone.utc)
+            auth_date = auth_date.replace(tzinfo=UTC)
         auth_timestamp = auth_date.timestamp()
     else:
         auth_timestamp = float(auth_date)
