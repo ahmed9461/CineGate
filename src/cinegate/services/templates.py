@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from cinegate.admin.registry import get_template_definition
 from cinegate.db.session import Database
 from cinegate.presentation.templates import (
@@ -7,7 +9,7 @@ from cinegate.presentation.templates import (
     TemplateRenderError,
     render_template,
 )
-from cinegate.repositories.templates import MessageTemplateRepository
+from cinegate.repositories.templates import MessageTemplateRepository, StoredTemplate
 
 
 class TemplateService:
@@ -21,28 +23,55 @@ class TemplateService:
         key: str,
         replacements: dict[str, str] | None = None,
     ) -> RenderedTemplate:
-        definition = get_template_definition(key)
-        replacements = replacements or {}
-
         async with self._database.session() as session:
-            stored = await MessageTemplateRepository(session).get(key)
-
-        body = stored.body if stored is not None else definition.default_body
-        entities = stored.entities if stored is not None else None
-
-        try:
-            return render_template(
-                body=body,
-                stored_entities=entities,
-                allowed_variables=definition.allowed_variables,
+            return await self.render_with_session(
+                session,
+                key=key,
                 replacements=replacements,
-                max_length=definition.max_length,
             )
-        except TemplateRenderError:
-            return render_template(
-                body=definition.default_body,
-                stored_entities=None,
-                allowed_variables=definition.allowed_variables,
-                replacements=replacements,
-                max_length=definition.max_length,
-            )
+
+    async def render_with_session(
+        self,
+        session: AsyncSession,
+        *,
+        key: str,
+        replacements: dict[str, str] | None = None,
+    ) -> RenderedTemplate:
+        definition = get_template_definition(key)
+        stored = await MessageTemplateRepository(session).get(key)
+        return _render_record(
+            stored=stored,
+            default_body=definition.default_body,
+            allowed_variables=definition.allowed_variables,
+            replacements=replacements or {},
+            max_length=definition.max_length,
+        )
+
+
+def _render_record(
+    *,
+    stored: StoredTemplate | None,
+    default_body: str,
+    allowed_variables: frozenset[str],
+    replacements: dict[str, str],
+    max_length: int,
+) -> RenderedTemplate:
+    body = stored.body if stored is not None else default_body
+    entities = stored.entities if stored is not None else None
+
+    try:
+        return render_template(
+            body=body,
+            stored_entities=entities,
+            allowed_variables=allowed_variables,
+            replacements=replacements,
+            max_length=max_length,
+        )
+    except TemplateRenderError:
+        return render_template(
+            body=default_body,
+            stored_entities=None,
+            allowed_variables=allowed_variables,
+            replacements=replacements,
+            max_length=max_length,
+        )
