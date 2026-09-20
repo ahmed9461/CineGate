@@ -18,7 +18,7 @@ from cinegate.db.models import (
     OwnerEditSession,
 )
 from cinegate.db.session import Database
-from cinegate.presentation.templates import serialize_entities
+from cinegate.presentation.templates import TemplateRenderError, serialize_entities
 
 DATABASE_URL = os.getenv("CINEGATE_DATABASE_URL")
 OWNER_ID = 123456789
@@ -204,7 +204,7 @@ async def test_invalid_template_does_not_mutate_or_end_edit(database: Database) 
         target_key="welcome",
     )
 
-    with pytest.raises(Exception, match="unsupported"):
+    with pytest.raises(TemplateRenderError, match="unsupported"):
         await service.apply_template_edit(
             owner_user_id=OWNER_ID,
             body="Hello %movie%",
