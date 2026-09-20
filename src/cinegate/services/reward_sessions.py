@@ -24,6 +24,11 @@ _ACTIVE_STATUSES = (
     "rewarded",
     "delivering",
 )
+_EXPIRABLE_STATUSES = (
+    "pending",
+    "client_completed",
+    "provider_confirmed",
+)
 _DEFAULT_SESSION_SECONDS = 600
 _MIN_SESSION_SECONDS = 60
 _MAX_SESSION_SECONDS = 3600
@@ -66,7 +71,7 @@ class RewardSessionService:
                 update(RewardSession)
                 .where(
                     RewardSession.telegram_user_id == telegram_user_id,
-                    RewardSession.status.in_(_ACTIVE_STATUSES),
+                    RewardSession.status.in_(_EXPIRABLE_STATUSES),
                     RewardSession.expires_at <= now,
                 )
                 .values(status="expired")
@@ -225,7 +230,7 @@ class RewardSessionService:
                 update(RewardSession)
                 .where(
                     RewardSession.telegram_user_id == telegram_user_id,
-                    RewardSession.status.in_(_ACTIVE_STATUSES),
+                    RewardSession.status.in_(_EXPIRABLE_STATUSES),
                     RewardSession.expires_at <= now,
                 )
                 .values(status="expired")
@@ -257,9 +262,10 @@ class RewardSessionService:
     ) -> RewardSession:
         if reward is None:
             raise RewardSessionNotFound("reward session not found")
-        if reward.status == "expired" or reward.expires_at <= now:
-            if reward.status in _ACTIVE_STATUSES:
-                reward.status = "expired"
+        if reward.status == "expired":
+            raise RewardSessionExpired("reward session expired")
+        if reward.status in _EXPIRABLE_STATUSES and reward.expires_at <= now:
+            reward.status = "expired"
             raise RewardSessionExpired("reward session expired")
         return reward
 
