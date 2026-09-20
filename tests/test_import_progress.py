@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from dataclasses import replace
 from types import SimpleNamespace
+from uuid import UUID
 
 import pytest
 import pytest_asyncio
@@ -15,7 +16,10 @@ from cinegate.db.models import (
 )
 from cinegate.db.session import Database
 from cinegate.importer.progress import ImportProgressReporter, render_import_progress
-from cinegate.repositories.import_jobs import ArchiveImportRepository
+from cinegate.repositories.import_jobs import (
+    ArchiveImportRepository,
+    ImportJobSnapshot,
+)
 from cinegate.repositories.settings import SettingsRepository
 
 DATABASE_URL = os.getenv("CINEGATE_DATABASE_URL")
