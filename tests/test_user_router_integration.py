@@ -13,13 +13,16 @@ from cinegate.bot.callbacks import MovieBackCallback, MovieSelectCallback
 from cinegate.bot.user_router import build_user_router
 from cinegate.db.models import (
     AppSetting,
+    Delivery,
     MessageTemplate,
     Movie,
     MovieQuality,
+    RewardSession,
     UserSearchSession,
 )
 from cinegate.db.session import Database
 from cinegate.services.movie_search import MovieSearchService
+from cinegate.services.reward_sessions import RewardSessionService
 from cinegate.services.search_sessions import SearchSessionService
 
 DATABASE_URL = os.getenv("CINEGATE_DATABASE_URL")
@@ -29,6 +32,8 @@ USER_ID = 123456789
 
 async def clean_database(database: Database) -> None:
     async with database.session() as session, session.begin():
+        await session.execute(delete(Delivery))
+        await session.execute(delete(RewardSession))
         await session.execute(delete(UserSearchSession))
         await session.execute(delete(MovieQuality))
         await session.execute(delete(Movie))
@@ -159,6 +164,7 @@ async def test_direct_search_movie_open_and_back_flow(database: Database) -> Non
         database=database,
         search=search,
         sessions=sessions,
+        rewards=RewardSessionService(database),
     )
     bot = FakeBot()
 
@@ -230,6 +236,7 @@ async def test_no_result_uses_default_message_without_keyboard(
         database=database,
         search=MovieSearchService(database),
         sessions=SearchSessionService(database),
+        rewards=RewardSessionService(database),
     )
     bot = FakeBot()
     search_handler = handler(router, "message", "direct_movie_search")
@@ -248,6 +255,7 @@ async def test_slash_command_is_not_treated_as_movie_search(database: Database) 
         database=database,
         search=MovieSearchService(database),
         sessions=SearchSessionService(database),
+        rewards=RewardSessionService(database),
     )
     bot = FakeBot()
     search_handler = handler(router, "message", "direct_movie_search")
@@ -278,6 +286,7 @@ async def test_rapid_duplicate_movie_callback_copies_poster_once(
         database=database,
         search=search,
         sessions=sessions,
+        rewards=RewardSessionService(database),
     )
     bot = FakeBot()
 
@@ -326,6 +335,7 @@ async def test_no_result_message_can_be_changed_from_database(
         database=database,
         search=MovieSearchService(database),
         sessions=SearchSessionService(database),
+        rewards=RewardSessionService(database),
     )
     bot = FakeBot()
     search_handler = handler(router, "message", "direct_movie_search")
@@ -349,6 +359,7 @@ async def test_result_message_is_deleted_if_session_persistence_fails(
         database=database,
         search=search,
         sessions=sessions,
+        rewards=RewardSessionService(database),
     )
     bot = FakeBot()
 
@@ -383,6 +394,7 @@ async def test_copied_poster_is_deleted_if_movie_state_persistence_fails(
         database=database,
         search=search,
         sessions=sessions,
+        rewards=RewardSessionService(database),
     )
     bot = FakeBot()
 
