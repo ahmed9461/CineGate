@@ -101,6 +101,13 @@ async def seed_job_and_mappings(database: Database):
             job_id=job.id,
             mappings=((1, 101), (2, 102), (3, 103)),
         )
+        await repository.record_transfer_batch(
+            job_id=job.id,
+            processed_through_source_id=3,
+            processed_count=3,
+            skipped_count=0,
+            forwarded_mappings=(),
+        )
         await repository.mark_running(job.id)
         await repository.mark_transferred(job.id)
         return job.id
@@ -385,3 +392,45 @@ async def test_verify_is_non_destructive_and_reports_missing_and_mismatch(
     assert verification.missing_messages == 1
     assert verification.source_mismatches == 1
     assert before == after
+
+
+
+@pytest.mark.asyncio
+async def test_paused_reindex_can_resume_after_transfer_completed(
+    database: Database,
+) -> None:
+    job_id = await seed_job_and_mappings(database)
+
+    async with database.session() as session, session.begin():
+        repository = ArchiveImportRepository(session)
+        await repository.mark_reindexing(job_id)
+        await repository.mark_paused(job_id, "temporary archive outage")
+
+    gateway = ReindexGateway(
+        {
+            101: archive_message(
+                101,
+                photo=True,
+                text="الفيلم: Resume Pause\nالسنة: 2025\nالقصة: قصة",
+            ),
+            102: archive_message(
+                102,
+                video=True,
+                text="Resume Pause 2025 #720p",
+            ),
+            103: archive_message(
+                103,
+                video=True,
+                text="Resume Pause 2025 #1080p",
+            ),
+        }
+    )
+    service = HistoricalImportService(
+        database=database,
+        gateway=gateway,  # type: ignore[arg-type]
+    )
+
+    completed = await service.reindex(job_id=job_id, full=False)
+
+    assert completed.status == "completed"
+    assert completed.last_reindexed_source_message_id == 3
