@@ -15,6 +15,7 @@ from cinegate.db.models import (
 from cinegate.db.session import Database
 from cinegate.importer.errors import (
     HistoricalImportError,
+    ImportChannelAccessError,
     ImportFloodWaitTooLong,
     SourceForwardingRestricted,
 )
@@ -56,6 +57,7 @@ class FakeGateway:
         self.forward_batches: list[tuple[int, ...]] = []
         self.fail_after_store_once = False
         self.protected = False
+        self.permission_denied = False
         self.flood_seconds: int | None = None
 
     async def resolve_channels(self, *, source_channel_id, archive_channel_id):
@@ -99,6 +101,8 @@ class FakeGateway:
     async def forward_batch(self, *, source, archive, messages):
         assert source is self.source
         assert archive is self.archive
+        if self.permission_denied:
+            raise ImportChannelAccessError("cannot write to archive")
         if self.flood_seconds is not None:
             raise ImportFloodWaitTooLong(self.flood_seconds)
 
@@ -322,3 +326,43 @@ async def test_large_history_never_exceeds_configured_forward_batch(
     assert job.copied_messages == 250
     assert len(gateway.forward_batches) == 10
     assert max(len(batch) for batch in gateway.forward_batches) == 25
+
+
+
+@pytest.mark.asyncio
+async def test_write_permission_failure_does_not_advance_checkpoint(
+    database: Database,
+) -> None:
+    gateway = FakeGateway(
+        [
+            source_message(1, text="one"),
+            source_message(2, text="two"),
+        ]
+    )
+    gateway.permission_denied = True
+    service = HistoricalImportService(
+        database=database,
+        gateway=gateway,  # type: ignore[arg-type]
+        batch_size=2,
+    )
+
+    with pytest.raises(ImportChannelAccessError):
+        await service.transfer(
+            source_channel_id=SOURCE_ID,
+            archive_channel_id=ARCHIVE_ID,
+        )
+
+    async with database.session() as session:
+        repository = ArchiveImportRepository(session)
+        job = await repository.get_job_by_pair(
+            source_channel_id=SOURCE_ID,
+            archive_channel_id=ARCHIVE_ID,
+        )
+        assert job is not None
+        mapping_count = await repository.count_mappings(job.id)
+
+    assert job.status == "failed"
+    assert job.last_copied_source_message_id == 0
+    assert job.processed_messages == 0
+    assert job.copied_messages == 0
+    assert mapping_count == 0
