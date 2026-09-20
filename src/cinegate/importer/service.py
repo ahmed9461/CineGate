@@ -33,6 +33,14 @@ class HistoricalImportResult:
     job: ImportJobSnapshot
 
 
+@dataclass(frozen=True, slots=True)
+class ImportVerification:
+    total_mappings: int
+    present_messages: int
+    missing_messages: int
+    source_mismatches: int
+
+
 class HistoricalImportService:
     """Resumable one-time source→Archive transfer and reindex."""
 
@@ -72,6 +80,63 @@ class HistoricalImportService:
             full=False,
         )
         return HistoricalImportResult(job=job)
+
+    async def verify(self, *, job_id) -> ImportVerification:
+        job = await self._get_job(job_id)
+        if job is None:
+            raise HistoricalImportError("historical import job not found")
+
+        async with historical_import_lock(
+            self._database,
+            source_channel_id=job.source_channel_id,
+            archive_channel_id=job.archive_channel_id,
+        ):
+            archive = await self._gateway.resolve_channel(job.archive_channel_id)
+            after_source_id = 0
+            total = 0
+            present = 0
+            missing = 0
+            mismatched = 0
+
+            while True:
+                mappings = await self._list_mappings(
+                    job_id=job.id,
+                    after_source_message_id=after_source_id,
+                )
+                if not mappings:
+                    break
+
+                archive_ids = [mapping.archive_message_id for mapping in mappings]
+                messages = await self._gateway.get_messages_by_ids(
+                    archive,
+                    archive_ids,
+                )
+                if len(messages) != len(mappings):
+                    raise HistoricalImportError(
+                        "archive verification returned an unexpected result length"
+                    )
+
+                for mapping, message in zip(mappings, messages, strict=True):
+                    total += 1
+                    if message is None:
+                        missing += 1
+                    else:
+                        recovered_source_id = forwarded_source_message_id(
+                            message,
+                            expected_source_channel_id=job.source_channel_id,
+                        )
+                        if recovered_source_id == mapping.source_message_id:
+                            present += 1
+                        else:
+                            mismatched += 1
+                    after_source_id = mapping.source_message_id
+
+            return ImportVerification(
+                total_mappings=total,
+                present_messages=present,
+                missing_messages=missing,
+                source_mismatches=mismatched,
+            )
 
     async def transfer(
         self,
