@@ -44,6 +44,13 @@ class SettingsRepository:
             raise TypeError(f"setting {key!r} must contain a number")
         return float(value)
 
+    async def delete(self, key: str) -> bool:
+        row = await self._session.get(AppSetting, key)
+        if row is None:
+            return False
+        await self._session.delete(row)
+        return True
+
     async def set(self, key: str, value: Any) -> None:
         statement = insert(AppSetting).values(key=key, value=value)
         statement = statement.on_conflict_do_update(
