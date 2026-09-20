@@ -30,30 +30,40 @@ class ImportProgressReporter:
         database: Database,
         bot_token: str | None = None,
         telegram_min_interval: float = 5.0,
+        cli_min_interval: float = 1.0,
         printer: Callable[[str], None] = print,
         monotonic: Callable[[], float] = time.monotonic,
     ) -> None:
         if telegram_min_interval <= 0:
             raise ValueError("telegram_min_interval must be positive")
+        if cli_min_interval <= 0:
+            raise ValueError("cli_min_interval must be positive")
 
         self._database = database
         self._printer = printer
         self._monotonic = monotonic
         self._telegram_min_interval = telegram_min_interval
+        self._cli_min_interval = cli_min_interval
         self._bot = Bot(bot_token) if bot_token else None
         self._last_telegram_at = 0.0
+        self._last_cli_at = 0.0
         self._last_status: str | None = None
 
     async def __call__(self, job: ImportJobSnapshot) -> None:
         text = render_import_progress(job)
-        self._printer(_render_cli_line(job))
+        now = self._monotonic()
+        status_changed = job.status != self._last_status
+        if (
+            status_changed
+            or now - self._last_cli_at >= self._cli_min_interval
+        ):
+            self._printer(_render_cli_line(job))
+            self._last_cli_at = now
 
         if self._bot is None:
             self._last_status = job.status
             return
 
-        now = self._monotonic()
-        status_changed = job.status != self._last_status
         force_update = (
             job.status in _TERMINAL_OR_PHASE_STATUSES
             and status_changed
