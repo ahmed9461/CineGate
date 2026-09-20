@@ -12,6 +12,7 @@ from cinegate.db.models import (
     AdminAuditLog,
     AppSetting,
     ArchiveImportJob,
+    ArchiveImportMessageMap,
     Delivery,
     MessageTemplate,
     Movie,
@@ -28,6 +29,8 @@ ARCHIVE_CHANNEL_ID = -1001234567890
 
 async def clean_database(database: Database) -> None:
     async with database.session() as session, session.begin():
+        await session.execute(delete(ArchiveImportMessageMap))
+        await session.execute(delete(ArchiveImportJob))
         await session.execute(delete(AdminAuditLog))
         await session.execute(delete(OwnerEditSession))
         await session.execute(delete(Delivery))
