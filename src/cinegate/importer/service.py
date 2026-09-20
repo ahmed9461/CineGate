@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
@@ -26,6 +27,8 @@ from cinegate.repositories.settings import SettingsRepository
 from cinegate.services.archive_indexer import ArchiveIndexService
 
 ProgressCallback = Callable[[ImportJobSnapshot], Awaitable[None]]
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -580,8 +583,15 @@ class HistoricalImportService:
             )
 
     async def _report(self, job: ImportJobSnapshot) -> None:
-        if self._progress_callback is not None:
+        if self._progress_callback is None:
+            return
+        try:
             await self._progress_callback(job)
+        except Exception:
+            logger.warning(
+                "Historical import progress callback failed",
+                exc_info=True,
+            )
 
 
 def _require_strictly_increasing(values: tuple[int, ...], label: str) -> None:
