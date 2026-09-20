@@ -150,3 +150,33 @@ async def test_repeated_short_flood_wait_is_bounded(
         )
 
     assert gateway._client.calls == 4
+
+
+
+class FakeEntityClient:
+    def __init__(self) -> None:
+        self.dialog_calls = 0
+        self.entity_calls = []
+
+    async def get_dialogs(self):
+        self.dialog_calls += 1
+        return []
+
+    async def get_entity(self, channel_id):
+        self.entity_calls.append(channel_id)
+        return SimpleNamespace(id=channel_id, noforwards=False)
+
+
+@pytest.mark.asyncio
+async def test_private_channel_entity_cache_is_loaded_once() -> None:
+    gateway = object.__new__(HistoricalTelegramGateway)
+    gateway._dialogs_loaded = False
+    gateway._client = FakeEntityClient()
+
+    first = await gateway.resolve_channel(-100111)
+    second = await gateway.resolve_channel(-100222)
+
+    assert first.id == -100111
+    assert second.id == -100222
+    assert gateway._client.dialog_calls == 1
+    assert gateway._client.entity_calls == [-100111, -100222]
