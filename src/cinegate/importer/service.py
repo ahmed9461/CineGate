@@ -160,6 +160,10 @@ class HistoricalImportService:
 
             if job.status == "completed":
                 return job
+            if job.status == "reindexing":
+                raise HistoricalImportError(
+                    "cannot transfer while historical reindex is active"
+                )
 
             job = await self._initialize_snapshot_if_needed(
                 job=job,
