@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncIterator, Sequence
 from pathlib import Path
 from typing import Any
@@ -146,30 +147,42 @@ class HistoricalTelegramGateway:
         if not messages:
             return ()
 
-        try:
-            forwarded = await self._client.forward_messages(
-                archive,
-                list(messages),
-                from_peer=source,
-                silent=True,
-            )
-        except errors.ChatForwardsRestrictedError as exc:
-            raise SourceForwardingRestricted(
-                "Telegram rejected forwarding because source protection is enabled"
-            ) from exc
-        except errors.FloodWaitError as exc:
-            raise ImportFloodWaitTooLong(int(exc.seconds)) from exc
-        except (
-            errors.ChatWriteForbiddenError,
-            errors.ChannelPrivateError,
-        ) as exc:
-            raise ImportChannelAccessError(
-                "UserBot cannot write to or access the Archive Channel"
-            ) from exc
-        except errors.RPCError as exc:
-            raise HistoricalImportError(
-                f"Telegram forwarding failed: {type(exc).__name__}"
-            ) from exc
+        flood_retries = 0
+        while True:
+            try:
+                forwarded = await self._client.forward_messages(
+                    archive,
+                    list(messages),
+                    from_peer=source,
+                    silent=True,
+                )
+                break
+            except errors.ChatForwardsRestrictedError as exc:
+                raise SourceForwardingRestricted(
+                    "Telegram rejected forwarding because source protection is enabled"
+                ) from exc
+            except errors.FloodWaitError as exc:
+                seconds = int(exc.seconds)
+                if seconds > self._flood_wait_limit:
+                    raise ImportFloodWaitTooLong(seconds) from exc
+
+                flood_retries += 1
+                if flood_retries > 3:
+                    raise HistoricalImportError(
+                        "repeated Telegram FloodWait prevented bounded forwarding"
+                    ) from exc
+                await asyncio.sleep(seconds)
+            except (
+                errors.ChatWriteForbiddenError,
+                errors.ChannelPrivateError,
+            ) as exc:
+                raise ImportChannelAccessError(
+                    "UserBot cannot write to or access the Archive Channel"
+                ) from exc
+            except errors.RPCError as exc:
+                raise HistoricalImportError(
+                    f"Telegram forwarding failed: {type(exc).__name__}"
+                ) from exc
 
         if forwarded is None:
             return ()
