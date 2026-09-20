@@ -66,6 +66,8 @@ class ActiveOwnerEditFilter(BaseFilter):
         self._admin = admin
 
     async def __call__(self, message: Message):
+        if message.chat.type != ChatType.PRIVATE:
+            return False
         if message.from_user is None or message.from_user.id != self._owner_user_id:
             return False
         edit = await self._admin.get_edit(self._owner_user_id)
