@@ -261,6 +261,63 @@ class Delivery(Base):
     )
 
 
+class OwnerEditSession(Base):
+    __tablename__ = "owner_edit_sessions"
+    __table_args__ = (
+        CheckConstraint(
+            "edit_kind IN ('setting', 'template')",
+            name="ck_owner_edit_sessions_kind",
+        ),
+    )
+
+    owner_user_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    edit_kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    target_key: Mapped[str] = mapped_column(String(128), nullable=False)
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+
+class AdminAuditLog(Base):
+    __tablename__ = "admin_audit_log"
+    __table_args__ = (
+        CheckConstraint(
+            "target_type IN ('setting', 'template')",
+            name="ck_admin_audit_log_target_type",
+        ),
+        Index(
+            "ix_admin_audit_log_owner_created",
+            "owner_user_id",
+            "created_at",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    owner_user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    action: Mapped[str] = mapped_column(String(32), nullable=False)
+    target_type: Mapped[str] = mapped_column(String(16), nullable=False)
+    target_key: Mapped[str] = mapped_column(String(128), nullable=False)
+    old_value: Mapped[dict | list | str | int | float | bool | None] = mapped_column(
+        JSONB
+    )
+    new_value: Mapped[dict | list | str | int | float | bool | None] = mapped_column(
+        JSONB
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+
 class AppSetting(Base):
     __tablename__ = "app_settings"
 
