@@ -5,7 +5,11 @@ import logging
 from contextlib import suppress
 
 from aiogram import Bot
-from aiogram.exceptions import TelegramAPIError, TelegramBadRequest
+from aiogram.exceptions import (
+    TelegramAPIError,
+    TelegramBadRequest,
+    TelegramForbiddenError,
+)
 
 from cinegate.domain.delivery import DueDeletion
 from cinegate.services.delivery import DeliveryService
@@ -84,10 +88,19 @@ class DeliveryDeletionWorker:
                 chat_id=item.telegram_user_id,
                 message_id=item.telegram_message_id,
             )
-        except TelegramBadRequest:
-            # The user may already have deleted the message. Either way there
-            # is nothing useful left for CineGate to delete.
-            await self._delivery_service.mark_deleted(item.delivery_id)
+        except TelegramBadRequest as exc:
+            if _is_missing_message_error(exc):
+                await self._delivery_service.mark_deleted(item.delivery_id)
+            else:
+                await self._delivery_service.mark_delete_failed(
+                    item.delivery_id,
+                    str(exc),
+                )
+        except TelegramForbiddenError as exc:
+            await self._delivery_service.mark_delete_failed(
+                item.delivery_id,
+                str(exc),
+            )
         except TelegramAPIError as exc:
             logger.warning(
                 "Movie deletion failed delivery_id=%s",
@@ -100,3 +113,12 @@ class DeliveryDeletionWorker:
             )
         else:
             await self._delivery_service.mark_deleted(item.delivery_id)
+
+
+
+def _is_missing_message_error(exc: TelegramBadRequest) -> bool:
+    message = str(exc).casefold()
+    return (
+        "message to delete not found" in message
+        or "message not found" in message
+    )
