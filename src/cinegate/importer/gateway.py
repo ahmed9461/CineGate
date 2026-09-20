@@ -65,6 +65,17 @@ class HistoricalTelegramGateway:
     async def disconnect(self) -> None:
         await self._client.disconnect()
 
+    async def resolve_channel(self, channel_id: int) -> Any:
+        # Populate entity cache so marked private channel IDs can resolve
+        # reliably from an authenticated user's dialogs.
+        await self._client.get_dialogs()
+        try:
+            return await self._client.get_entity(channel_id)
+        except (ValueError, errors.RPCError) as exc:
+            raise ImportChannelAccessError(
+                f"could not resolve Telegram channel {channel_id}"
+            ) from exc
+
     async def resolve_channels(
         self,
         *,
@@ -74,17 +85,8 @@ class HistoricalTelegramGateway:
         if source_channel_id == archive_channel_id:
             raise ImportChannelAccessError("source and archive channels must differ")
 
-        # Populate entity cache so marked private channel IDs can resolve
-        # reliably from an authenticated user's dialogs.
-        await self._client.get_dialogs()
-
-        try:
-            source = await self._client.get_entity(source_channel_id)
-            archive = await self._client.get_entity(archive_channel_id)
-        except (ValueError, errors.RPCError) as exc:
-            raise ImportChannelAccessError(
-                "could not resolve source/archive channel from UserBot session"
-            ) from exc
+        source = await self.resolve_channel(source_channel_id)
+        archive = await self.resolve_channel(archive_channel_id)
 
         if bool(getattr(source, "noforwards", False)):
             raise SourceForwardingRestricted(
