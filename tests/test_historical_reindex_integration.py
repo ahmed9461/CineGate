@@ -322,3 +322,65 @@ async def test_existing_live_index_rows_are_not_duplicated(
 
     assert movie_count == 1
     assert quality_count == 1
+
+
+
+def forwarded_archive_message(
+    archive_message_id: int,
+    *,
+    source_message_id: int,
+    source_channel_id: int = SOURCE_ID,
+):
+    return SimpleNamespace(
+        id=archive_message_id,
+        photo=None,
+        video=None,
+        document=None,
+        raw_text="forwarded",
+        fwd_from=SimpleNamespace(
+            channel_post=source_message_id,
+            from_id=None,
+        ),
+        forward=SimpleNamespace(chat_id=source_channel_id),
+    )
+
+
+@pytest.mark.asyncio
+async def test_verify_is_non_destructive_and_reports_missing_and_mismatch(
+    database: Database,
+) -> None:
+    job_id = await seed_job_and_mappings(database)
+    gateway = ReindexGateway(
+        {
+            101: forwarded_archive_message(
+                101,
+                source_message_id=1,
+            ),
+            102: None,
+            103: forwarded_archive_message(
+                103,
+                source_message_id=3,
+                source_channel_id=-1009999999999,
+            ),
+        }
+    )
+    service = HistoricalImportService(
+        database=database,
+        gateway=gateway,  # type: ignore[arg-type]
+        reindex_batch_size=2,
+    )
+
+    before = None
+    async with database.session() as session:
+        before = await ArchiveImportRepository(session).get_job(job_id)
+
+    verification = await service.verify(job_id=job_id)
+
+    async with database.session() as session:
+        after = await ArchiveImportRepository(session).get_job(job_id)
+
+    assert verification.total_mappings == 3
+    assert verification.present_messages == 1
+    assert verification.missing_messages == 1
+    assert verification.source_mismatches == 1
+    assert before == after
