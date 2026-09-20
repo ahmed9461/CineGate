@@ -5,7 +5,10 @@ from dataclasses import dataclass, field
 
 from aiogram import Bot, Dispatcher
 
+from cinegate.admin.diagnostics import AdminDiagnosticsService
+from cinegate.admin.service import OwnerAdminService
 from cinegate.bot.archive_router import build_archive_router
+from cinegate.bot.owner_router import build_owner_router
 from cinegate.bot.user_router import build_user_router
 from cinegate.config import SecretsSettings, get_settings
 from cinegate.db.session import Database
@@ -63,6 +66,8 @@ def build_runtime(settings: SecretsSettings | None = None) -> AppRuntime:
     search_sessions = SearchSessionService(database)
     rewards = RewardSessionService(database)
     templates = TemplateService(database)
+    owner_admin = OwnerAdminService(database)
+    admin_diagnostics = AdminDiagnosticsService(database)
     delivery = DeliveryService(database, bot, templates=templates)
     deletion_worker = DeliveryDeletionWorker(
         delivery_service=delivery,
@@ -71,6 +76,14 @@ def build_runtime(settings: SecretsSettings | None = None) -> AppRuntime:
 
     dispatcher = Dispatcher()
     dispatcher.include_router(build_archive_router(indexer, notifier))
+    dispatcher.include_router(
+        build_owner_router(
+            owner_user_id=settings.owner_user_id,
+            admin=owner_admin,
+            diagnostics=admin_diagnostics,
+            templates=templates,
+        )
+    )
     dispatcher.include_router(
         build_user_router(
             database=database,
