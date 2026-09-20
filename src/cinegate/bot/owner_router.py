@@ -22,8 +22,8 @@ from cinegate.admin.presentation import (
     templates_list_text,
 )
 from cinegate.admin.registry import (
-    AdminValidationError,
     SETTINGS,
+    AdminValidationError,
     get_setting_definition,
     get_template_definition,
 )
