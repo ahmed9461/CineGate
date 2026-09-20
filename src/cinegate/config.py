@@ -27,6 +27,14 @@ class SecretsSettings(BaseSettings):
     database_url: SecretStr
     webhook_secret: SecretStr
     adsgram_callback_secret: SecretStr | None = None
+    owner_user_id: int | None = None
+
+    @field_validator("owner_user_id")
+    @classmethod
+    def validate_owner_user_id(cls, value: int | None) -> int | None:
+        if value is not None and value <= 0:
+            raise ValueError("owner_user_id must be a positive Telegram user ID")
+        return value
 
     @field_validator("database_url")
     @classmethod
