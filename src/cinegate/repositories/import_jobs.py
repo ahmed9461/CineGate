@@ -15,8 +15,8 @@ _ACTIVE_BULK_STATUSES = ("running", "reindexing")
 _ALLOWED_TRANSITIONS: dict[str, frozenset[str]] = {
     "ready": frozenset({"running", "failed"}),
     "running": frozenset({"paused", "failed", "transferred"}),
-    "paused": frozenset({"running", "failed"}),
-    "failed": frozenset({"running"}),
+    "paused": frozenset({"running", "reindexing", "failed"}),
+    "failed": frozenset({"running", "reindexing"}),
     "transferred": frozenset({"running", "reindexing"}),
     "reindexing": frozenset({"paused", "failed", "completed"}),
     "completed": frozenset({"reindexing"}),
