@@ -1,5 +1,11 @@
 from aiogram.enums import ButtonStyle
 
+from cinegate.bot.admin_callbacks import (
+    AdminEditCallback,
+    AdminPageCallback,
+    AdminSettingCallback,
+    AdminTemplateCallback,
+)
 from cinegate.bot.callbacks import (
     MovieBackCallback,
     MovieSelectCallback,
@@ -55,6 +61,24 @@ def test_callback_payloads_round_trip_and_stay_under_telegram_limit() -> None:
             movie_id=9223372036854775807,
             quality="2160p",
         ).pack(),
+    )
+
+    assert all(len(payload.encode("utf-8")) <= 64 for payload in payloads)
+
+
+
+def test_admin_callback_payloads_stay_within_telegram_limit() -> None:
+    payloads = (
+        AdminPageCallback(page="diagnostics").pack(),
+        AdminSettingCallback(
+            action="edit",
+            key="miniapp_init_data_max_age_seconds",
+        ).pack(),
+        AdminTemplateCallback(
+            action="preview",
+            key="active_reward_conflict",
+        ).pack(),
+        AdminEditCallback(action="cancel").pack(),
     )
 
     assert all(len(payload.encode("utf-8")) <= 64 for payload in payloads)
