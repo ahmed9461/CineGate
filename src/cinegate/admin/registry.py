@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any
 from urllib.parse import urlsplit
 
 from cinegate.presentation.delivery import DEFAULT_DELIVERY_CAPTION
