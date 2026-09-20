@@ -1,6 +1,6 @@
 # Plan 0006 — Reward sessions, delivery, and durable deletion
 
-**Status:** In progress  
+**Status:** Completed  
 **Created:** 2026-09-20  
 **Last updated:** 2026-09-20
 
@@ -268,53 +268,53 @@ No Celery/Redis is required for this timer.
 
 ### Reward sessions
 
-- [ ] exact user/movie/quality binding
-- [ ] one active session per user
-- [ ] different quality cannot replace active reward
-- [ ] expired session allows new reward
-- [ ] duplicate client completion idempotent
-- [ ] duplicate provider confirmation idempotent
-- [ ] provider-first then client → rewarded
-- [ ] client-first then provider → rewarded
-- [ ] wrong Telegram user cannot claim session
-- [ ] invalid Mini App signature rejected
-- [ ] stale Mini App auth_date rejected
+- [x] exact user/movie/quality binding
+- [x] one active session per user
+- [x] different quality cannot replace active reward
+- [x] expired session allows new reward
+- [x] duplicate client completion idempotent
+- [x] duplicate provider confirmation idempotent
+- [x] provider-first then client → rewarded
+- [x] client-first then provider → rewarded
+- [x] wrong Telegram user cannot claim session
+- [x] invalid Mini App signature rejected
+- [x] stale Mini App auth_date rejected
 
 ### Mini App / AdsGram
 
-- [ ] page refuses unknown/expired session
-- [ ] page requires configured block ID
-- [ ] client page contains Telegram + AdsGram SDK
-- [ ] provider callback secret required
-- [ ] wrong callback secret rejected
-- [ ] callback with no active session is harmless
+- [x] page refuses unknown/expired session
+- [x] page requires configured block ID
+- [x] client page contains Telegram + AdsGram SDK
+- [x] provider callback secret required
+- [x] wrong callback secret rejected
+- [x] callback with no active session is harmless
 
 ### Delivery
 
-- [ ] rewarded exact quality is copied
-- [ ] caption variables render
-- [ ] %time% follows DB setting
-- [ ] delivered message persists delete deadline
-- [ ] duplicate delivery call does not send again
-- [ ] Telegram delivery failure keeps reward reusable
-- [ ] poster message is never scheduled for deletion
+- [x] rewarded exact quality is copied
+- [x] caption variables render
+- [x] %time% follows DB setting
+- [x] delivered message persists delete deadline
+- [x] duplicate delivery call does not send again
+- [x] Telegram delivery failure keeps reward reusable
+- [x] poster message is never scheduled for deletion
 
 ### Deletion
 
-- [ ] due message deleted
-- [ ] not-yet-due untouched
-- [ ] already-missing message becomes deleted
-- [ ] transient failure rescheduled with backoff
-- [ ] restart recovery handles stale deleting rows
-- [ ] batch bounded
-- [ ] concurrent workers cannot claim same due row
+- [x] due message deleted
+- [x] not-yet-due untouched
+- [x] already-missing message becomes deleted
+- [x] transient failure rescheduled with backoff
+- [x] restart recovery handles stale deleting rows
+- [x] batch bounded
+- [x] concurrent workers cannot claim same due row
 
 ### Quality gates
 
-- [ ] Ruff
-- [ ] pytest
-- [ ] migrations apply / full downgrade / restore
-- [ ] compileall
+- [x] Ruff
+- [x] pytest
+- [x] migrations apply / full downgrade / restore
+- [x] compileall
 
 ## Review #1 — correctness
 
@@ -346,50 +346,132 @@ Inspect:
 
 ## Acceptance criteria
 
-- [ ] production reward cannot be granted from client callback alone
-- [ ] reward session is exact user/movie/quality
-- [ ] provider callback is secret-protected
-- [ ] valid reward survives delivery failure
-- [ ] movie is copied from Archive Channel
-- [ ] delivery caption is dynamic/editable
-- [ ] only movie file is durably auto-deleted
-- [ ] restart-safe deletion implemented
-- [ ] ads-specific public values remain DB-configurable
-- [ ] all checks pass
-- [ ] two reviews documented
-- [ ] memory/status/progress updated
+- [x] production reward cannot be granted from client callback alone
+- [x] reward session is exact user/movie/quality
+- [x] provider callback is secret-protected
+- [x] valid reward survives delivery failure
+- [x] movie is copied from Archive Channel
+- [x] delivery caption is dynamic/editable
+- [x] only movie file is durably auto-deleted
+- [x] restart-safe deletion implemented
+- [x] ads-specific public values remain DB-configurable
+- [x] all checks pass
+- [x] two reviews documented
+- [x] memory/status/progress updated
 
 ## Implementation steps
 
 - [x] 1. Create this plan before code.
-- [ ] 2. Add optional AdsGram callback secret config.
-- [ ] 3. Add reward/delivery schema migrations.
-- [ ] 4. Implement reward-session service.
-- [ ] 5. Implement Telegram Mini App init-data validation.
-- [ ] 6. Implement AdsGram provider confirmation endpoint.
-- [ ] 7. Implement Mini App HTML/JS route.
-- [ ] 8. Connect quality callback to reward session/WebApp button.
-- [ ] 9. Implement delivery caption renderer.
-- [ ] 10. Implement exact quality delivery.
-- [ ] 11. Implement durable deletion worker.
-- [ ] 12. Wire worker into runtime lifecycle.
-- [ ] 13. Add full integration/unit tests.
-- [ ] 14. Run CI.
-- [ ] 15. Correctness review/fixes.
-- [ ] 16. Performance/complexity review/fixes.
-- [ ] 17. Final CI.
-- [ ] 18. Update project memory/docs.
-- [ ] 19. Mark complete.
+- [x] 2. Add optional AdsGram callback secret config.
+- [x] 3. Add reward/delivery schema migrations.
+- [x] 4. Implement reward-session service.
+- [x] 5. Implement Telegram Mini App init-data validation.
+- [x] 6. Implement AdsGram provider confirmation endpoint.
+- [x] 7. Implement Mini App HTML/JS route.
+- [x] 8. Connect quality callback to reward session/WebApp button.
+- [x] 9. Implement delivery caption renderer.
+- [x] 10. Implement exact quality delivery.
+- [x] 11. Implement durable deletion worker.
+- [x] 12. Wire worker into runtime lifecycle.
+- [x] 13. Add full integration/unit tests.
+- [x] 14. Run CI.
+- [x] 15. Correctness review/fixes.
+- [x] 16. Performance/complexity review/fixes.
+- [x] 17. Final CI.
+- [x] 18. Update project memory/docs.
+- [x] 19. Mark complete.
 
 ## Progress notes
 
-### 2026-09-20
+### 2026-09-20 — implementation
 
 - Plan created before code.
 - Telegram Mini App validation documentation reviewed.
 - AdsGram Reward + Reward URL documentation reviewed.
-- Production policy fixed at dual signal: client Telegram-validated completion + AdsGram server confirmation.
+- Production policy fixed at dual signal: Telegram-validated client completion + AdsGram server confirmation.
+- Added optional secret bootstrap setting for the provider callback.
+- Added migrations 0007 and 0008.
+- Added durable reward sessions and deliveries.
+- Added Mini App HTML/JS and provider callback routes.
+- Connected quality selection to a WebApp reward prompt.
+- Added dynamic delivery-caption rendering.
+- Added Telegram-side quality copy and persistent delete deadline.
+- Added in-process durable deletion worker with retry/backoff and restart reconciliation.
+
+### 2026-09-20 — review #1: correctness/security
+
+Findings and fixes:
+
+- Reward state is bound to the exact Telegram user, movie, and `movie_qualities` row.
+- Only one active reward session per Telegram user is permitted because AdsGram's documented Reward URL identifies the user but not a CineGate session.
+- Client-only completion never grants delivery; server provider proof is also required.
+- Both provider→client and client→provider ordering are idempotent and tested.
+- Signed Telegram `initData` and `auth_date` freshness are validated server-side.
+- Mini App settings embedded in JavaScript are escaped to prevent script injection.
+- A provider-only confirmation does **not** skip the current ad, reducing risk from a delayed user-only provider callback.
+- A client-completed session can resume verification without forcing another ad.
+- Earned `rewarded` state does not expire merely because the original ad-session TTL elapsed.
+- Rapid repeated quality clicks create one prompt; a different quality cannot silently replace an active reward.
+- Telegram delivery failure returns the session to `rewarded`; the user is not charged another ad.
+- Delivery copy is idempotent at the DB state level and uses the exact Archive Channel quality message.
+- `protect_content=False` is intentional so the user can save/forward before expiry.
+- Invalid owner delivery templates fall back to a known-safe default.
+- Cosmetic Telegram cleanup no longer creates webhook retries if cleanup itself temporarily fails.
+- The tiny post-`copyMessage`/pre-DB-commit crash window remains documented because Telegram offers no copy idempotency key.
+
+### 2026-09-20 — review #2: performance/recovery
+
+Findings and fixes:
+
+- No Redis/Celery/broker was added.
+- All Telegram/network I/O stays outside long DB transactions.
+- One reward row and one delivery row represent each rewarded request.
+- Due deletion is bounded and claimed with `FOR UPDATE SKIP LOCKED`.
+- Deletion concurrency is bounded.
+- Transient Telegram deletion failures use bounded exponential backoff.
+- Stale `sending` and `deleting` states are reconciled periodically, not only at process startup.
+- A single post-Telegram DB persistence failure no longer kills the worker.
+- Temporary DB outage does not permanently stop the deletion loop.
+- Telegram's 48-hour deletion limitation is enforced honestly: an impossible/permanent deletion becomes `delete_failed` instead of being falsely recorded as deleted.
+- Missing messages are considered successfully gone; other permanent BadRequest/Forbidden failures are retained as `delete_failed` for owner diagnostics.
+- Movie delete duration is bounded below Telegram's 48-hour deletion window.
+
+### 2026-09-20 — final verification
+
+Latest full code verification before documentation-only closeout:
+
+- Ruff: **all checks passed**
+- pytest: **137 passed**
+- PostgreSQL migrations: **0001 → 0008 passed**
+- full downgrade to base and restore to head: **passed**
+- Python compileall: **passed**
+
+The two test warnings are dependency deprecation notices from FastAPI/Starlette internals, not CineGate code.
+
+### Known external limitation
+
+AdsGram's documented Mini App Reward URL provides Telegram `userId` but no per-view CineGate session identifier or documented cryptographic signature. CineGate mitigates this with:
+
+- one active reward per user
+- Telegram-signed client identity
+- dual client/provider proof
+- provider-only state never skipping the current ad
+- high-entropy callback bearer secret
+
+If the provider later exposes a signed per-view/session token, that mechanism should replace the current user-only provider binding through a new plan.
+
+### Telegram deletion limitation
+
+Telegram only permits deleting messages sent less than 48 hours ago. CineGate schedules well below that limit and retries durably, but a server outage longer than the Telegram window can make deletion impossible. Such rows become `delete_failed`; they are not falsely marked deleted.
+
+See `docs/SECURITY.md`.
 
 ## Completion summary
 
-Pending.
+Plan 0006 is complete.
+
+Implemented the full rewarded-delivery path:
+
+`quality → reward session → Mini App → dual verification → Archive copy → persistent expiry → durable deletion`
+
+**Next exact step:** create Plan 0007 before implementing the owner/admin control center for runtime settings, message templates, diagnostics, and AdsGram public configuration.
