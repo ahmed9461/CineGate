@@ -4,7 +4,7 @@ CineGate is a Telegram movie-search and rewarded-delivery project backed by a pr
 
 ## Current phase
 
-The application foundation, archive parser, secure Telegram webhook, and real-time Archive Channel indexer are implemented.
+The application foundation, archive parser, secure Telegram webhook, real-time archive indexer, search flow, rewarded delivery, and durable deletion are implemented.
 
 Current stack:
 
@@ -41,6 +41,10 @@ The project intentionally does **not** include Redis, Celery, Kafka, or a micros
 User search/movie-page UX, rewarded ads, movie delivery, deletion, owner control center, and historical UserBot import are later phases.
 
 > **Webhook ordering:** Until a durable global update sequencer is added, production webhook registration must use `max_connections=1`.
+
+> **Deletion limit:** Telegram only permits deleting messages sent less than 48 hours ago. CineGate records `delete_failed` instead of claiming success when the platform can no longer delete a message.
+
+Security-sensitive operating rules are documented in `docs/SECURITY.md`.
 
 ## Local development
 
