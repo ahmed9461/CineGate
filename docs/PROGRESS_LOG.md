@@ -284,3 +284,78 @@ Pre-ad user flow is complete. Quality selection is not yet linked to reward/deli
 ### Exact next step
 
 Create `plans/0006-reward-delivery-and-deletion.md` before implementing durable reward sessions, provider-neutral Mini App handoff, archive quality delivery, and timed deletion.
+
+
+---
+
+## 2026-09-20 — Rewarded delivery and durable deletion completed
+
+### Plan
+
+- `plans/0006-reward-delivery-and-deletion.md` — completed
+
+### Implemented
+
+- exact user/movie/quality reward sessions
+- one active reward per Telegram user
+- signed Telegram Mini App identity validation
+- AdsGram Reward Mini App integration
+- protected AdsGram server Reward URL callback
+- dual client/provider reward verification
+- duplicate/conflicting quality-click protection
+- earned reward persistence after delivery failure
+- dynamic delivery caption variables
+- Archive Channel quality delivery with `copyMessage`
+- persistent delivery/delete deadlines
+- deletion retry/backoff
+- stale sending/deleting reconciliation
+- bounded concurrent deletion with PostgreSQL `SKIP LOCKED`
+- permanent `delete_failed` state
+- Mini App script-setting escaping
+- security/operations documentation
+
+### Correctness/security review
+
+Found and fixed:
+
+- client-only reward could never be sufficient
+- provider-only confirmation no longer skips the current ad
+- partial/earned sessions resume without unnecessary repeat ads
+- earned reward no longer expires with the original ad-session TTL
+- duplicate quality clicks create one reward prompt
+- different quality cannot silently replace an active reward
+- delivery failure leaves reward reusable
+- post-Telegram DB failures are recoverable
+- settings embedded in Mini App JavaScript are escaped
+- missing Telegram messages are distinguished from messages that are permanently undeletable
+
+### Recovery/performance review
+
+Confirmed/fixed:
+
+- Telegram/network calls remain outside long DB transactions
+- no movie file download/re-upload
+- no Redis/Celery/broker introduced
+- worker uses bounded concurrency
+- worker survives DB outages
+- stale state recovery repeats while the process remains alive
+- one failed state write does not kill the worker
+- impossible deletion after Telegram's 48-hour limit becomes `delete_failed`, not fake success
+
+### Verification
+
+Latest full code verification before documentation-only closeout:
+
+- Ruff: passed
+- pytest: **137 passed**
+- PostgreSQL migrations 0001→0008: passed
+- full downgrade/restore: passed
+- compileall: passed
+
+### Current stop point
+
+The complete user reward/delivery/deletion path exists. Production AdsGram external values are not yet configured.
+
+### Exact next step
+
+Create `plans/0007-owner-control-center.md` before implementing the owner-only runtime settings/template/diagnostics panel.
