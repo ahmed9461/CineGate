@@ -131,3 +131,88 @@ async def test_owner_notice_resumes_when_import_is_paused(
 
     assert len(indexer.calls) == 1
     assert notifier.calls == [123]
+
+
+
+@pytest.mark.asyncio
+async def test_late_mapped_historical_message_stays_suppressed_after_completion(
+    database: Database,
+) -> None:
+    async with database.session() as session, session.begin():
+        repository = ArchiveImportRepository(session)
+        job = await repository.get_or_create_job(
+            source_channel_id=SOURCE_ID,
+            archive_channel_id=ARCHIVE_ID,
+        )
+        await repository.initialize_snapshot(
+            job_id=job.id,
+            source_high_watermark_id=10,
+            archive_baseline_message_id=99,
+            source_total_estimate=1,
+        )
+        await repository.record_transfer_batch(
+            job_id=job.id,
+            processed_through_source_id=10,
+            processed_count=1,
+            skipped_count=0,
+            forwarded_mappings=((10, 100),),
+        )
+        await repository.mark_running(job.id)
+        await repository.mark_transferred(job.id)
+        await repository.mark_reindexing(job.id)
+        await repository.mark_completed(job.id)
+
+    indexer = FakeIndexer()
+    notifier = FakeNotifier()
+    router = build_archive_router(
+        indexer,  # type: ignore[arg-type]
+        notifier,  # type: ignore[arg-type]
+        database=database,
+    )
+
+    await archive_handler(router)(fake_channel_post(100))
+
+    assert len(indexer.calls) == 1
+    assert notifier.calls == []
+
+
+@pytest.mark.asyncio
+async def test_new_unmapped_archive_message_notifies_after_import_completed(
+    database: Database,
+) -> None:
+    async with database.session() as session, session.begin():
+        repository = ArchiveImportRepository(session)
+        job = await repository.get_or_create_job(
+            source_channel_id=SOURCE_ID,
+            archive_channel_id=ARCHIVE_ID,
+        )
+        await repository.initialize_snapshot(
+            job_id=job.id,
+            source_high_watermark_id=10,
+            archive_baseline_message_id=99,
+            source_total_estimate=1,
+        )
+        await repository.record_transfer_batch(
+            job_id=job.id,
+            processed_through_source_id=10,
+            processed_count=1,
+            skipped_count=0,
+            forwarded_mappings=((10, 100),),
+        )
+        await repository.mark_running(job.id)
+        await repository.mark_transferred(job.id)
+        await repository.mark_reindexing(job.id)
+        await repository.mark_completed(job.id)
+
+    indexer = FakeIndexer()
+    notifier = FakeNotifier()
+    router = build_archive_router(
+        indexer,  # type: ignore[arg-type]
+        notifier,  # type: ignore[arg-type]
+        database=database,
+    )
+
+    await archive_handler(router)(fake_channel_post(101))
+
+    assert len(indexer.calls) == 1
+    assert notifier.calls == [123]
