@@ -34,13 +34,23 @@ class DeliveryDeletionWorker:
         self._concurrency = max(1, min(25, concurrency))
 
     async def run(self, stop_event: asyncio.Event) -> None:
-        await self._delivery_service.recover_stale_sends()
-        await self._delivery_service.recover_stale_deletions()
+        recovered = False
 
         while not stop_event.is_set():
-            due = await self._delivery_service.claim_due_deletions(
-                limit=self._batch_size
-            )
+            try:
+                if not recovered:
+                    await self._delivery_service.recover_stale_sends()
+                    await self._delivery_service.recover_stale_deletions()
+                    recovered = True
+
+                due = await self._delivery_service.claim_due_deletions(
+                    limit=self._batch_size
+                )
+            except Exception:
+                logger.exception("Deletion worker database iteration failed")
+                await self._wait(stop_event)
+                continue
+
             if due:
                 semaphore = asyncio.Semaphore(self._concurrency)
                 await asyncio.gather(
@@ -51,11 +61,14 @@ class DeliveryDeletionWorker:
                 )
                 continue
 
-            with suppress(TimeoutError):
-                await asyncio.wait_for(
-                    stop_event.wait(),
-                    timeout=self._poll_seconds,
-                )
+            await self._wait(stop_event)
+
+    async def _wait(self, stop_event: asyncio.Event) -> None:
+        with suppress(TimeoutError):
+            await asyncio.wait_for(
+                stop_event.wait(),
+                timeout=self._poll_seconds,
+            )
 
     async def _delete_with_semaphore(
         self,
