@@ -39,17 +39,15 @@ def build_user_router(
     search: MovieSearchService,
     sessions: SearchSessionService,
     rewards: RewardSessionService,
-    templates: TemplateService,
+    templates: TemplateService | None = None,
 ) -> Router:
     router = Router(name="users")
+    templates = templates or TemplateService(database)
 
     @router.message(CommandStart(), F.chat.type == ChatType.PRIVATE)
     async def start(message: Message) -> None:
         rendered = await templates.render("welcome")
-        await message.answer(
-            rendered.text,
-            entities=list(rendered.entities) or None,
-        )
+        await _answer_rendered(message, rendered)
 
     @router.message(F.chat.type == ChatType.PRIVATE, F.text)
     async def direct_movie_search(message: Message, bot: Bot) -> None:
@@ -88,9 +86,9 @@ def build_user_router(
             rendered = await templates.render("search_no_results")
             keyboard = None
 
-        sent = await message.answer(
-            rendered.text,
-            entities=list(rendered.entities) or None,
+        sent = await _answer_rendered(
+            message,
+            rendered,
             reply_markup=keyboard,
         )
         try:
@@ -167,10 +165,10 @@ def build_user_router(
                 exc_info=True,
             )
             rendered = await templates.render("movie_unavailable")
-            await bot.send_message(
+            await _send_rendered(
+                bot,
                 user_id,
-                rendered.text,
-                entities=list(rendered.entities) or None,
+                rendered,
             )
             return
         except TelegramAPIError:
@@ -237,10 +235,10 @@ def build_user_router(
         await _safe_callback_answer(callback)
 
         try:
-            sent = await bot.send_message(
+            sent = await _send_rendered(
+                bot,
                 user_id,
-                rendered.text,
-                entities=list(rendered.entities) or None,
+                rendered,
                 reply_markup=build_search_results_keyboard(
                     results,
                     nonce=callback_data.nonce,
@@ -362,10 +360,10 @@ def build_user_router(
         )
 
         try:
-            sent = await bot.send_message(
+            sent = await _send_rendered(
+                bot,
                 user_id,
-                rendered_prompt.text,
-                entities=list(rendered_prompt.entities) or None,
+                rendered_prompt,
                 reply_markup=build_reward_keyboard(miniapp_url),
             )
         except TelegramAPIError:
@@ -406,6 +404,31 @@ async def _reward_config(database: Database) -> tuple[str, str] | None:
     if not isinstance(block_id, str) or not block_id.strip():
         return None
     return public_base_url.rstrip("/"), block_id.strip()
+
+
+async def _answer_rendered(
+    message: Message,
+    rendered,
+    *,
+    reply_markup=None,
+):
+    kwargs = {"reply_markup": reply_markup}
+    if rendered.entities:
+        kwargs["entities"] = list(rendered.entities)
+    return await message.answer(rendered.text, **kwargs)
+
+
+async def _send_rendered(
+    bot: Bot,
+    chat_id: int,
+    rendered,
+    *,
+    reply_markup=None,
+):
+    kwargs = {"reply_markup": reply_markup}
+    if rendered.entities:
+        kwargs["entities"] = list(rendered.entities)
+    return await bot.send_message(chat_id, rendered.text, **kwargs)
 
 
 async def _cleanup_previous_ui(
