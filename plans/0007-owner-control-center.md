@@ -1,6 +1,6 @@
 # Plan 0007 — Owner control center
 
-**Status:** In progress
+**Status:** Completed
 **Created:** 2026-09-20
 **Last updated:** 2026-09-20
 
@@ -90,47 +90,120 @@ Show concise counts for indexed/orphan/ambiguous movies, qualities, active/rewar
 
 ## Tests
 
-- [ ] owner admin access works
-- [ ] non-owner admin access is ignored
-- [ ] forged non-owner callbacks are ignored
-- [ ] setting parsing/bounds are covered
-- [ ] HTTPS public URL validation is covered
-- [ ] edit state survives service recreation
-- [ ] audit and mutation commit atomically
-- [ ] same-value updates create no audit noise
-- [ ] template variables are validated
-- [ ] Telegram entities are stored
-- [ ] variable rendering preserves entity offsets
-- [ ] reset restores defaults
-- [ ] diagnostics counts are correct
-- [ ] callback payloads remain within Telegram limits
-- [ ] rapid duplicate mutations are safe
-- [ ] Ruff passes
-- [ ] pytest passes
-- [ ] migrations round-trip passes
-- [ ] compileall passes
+- [x] owner admin access works
+- [x] non-owner admin access is ignored
+- [x] forged non-owner callbacks are ignored
+- [x] setting parsing/bounds are covered
+- [x] HTTPS public URL validation is covered
+- [x] edit state survives service recreation
+- [x] audit and mutation commit atomically
+- [x] same-value updates create no audit noise
+- [x] template variables are validated
+- [x] Telegram entities are stored
+- [x] variable rendering preserves entity offsets
+- [x] reset restores defaults
+- [x] diagnostics counts are correct
+- [x] callback payloads remain within Telegram limits
+- [x] rapid duplicate mutations are safe
+- [x] Ruff passes
+- [x] pytest passes
+- [x] migrations round-trip passes
+- [x] compileall passes
 
 ## Implementation steps
 
 - [x] 1. Create this plan before code.
-- [ ] 2. Add owner bootstrap authorization setting.
-- [ ] 3. Add edit-state/audit models and migration.
-- [ ] 4. Implement typed setting registry.
-- [ ] 5. Extend setting/template repositories.
-- [ ] 6. Implement owner edit/audit service.
-- [ ] 7. Implement entity-aware template rendering.
-- [ ] 8. Update user-facing template call sites.
-- [ ] 9. Implement admin callbacks/keyboards.
-- [ ] 10. Implement owner router and navigation.
-- [ ] 11. Implement settings edit/reset.
-- [ ] 12. Implement template edit/preview/reset.
-- [ ] 13. Implement status/diagnostics.
-- [ ] 14. Wire owner router before general user router.
-- [ ] 15. Add tests and run CI.
-- [ ] 16. Correctness/security review.
-- [ ] 17. Performance/complexity review.
-- [ ] 18. Final CI and documentation updates.
+- [x] 2. Add owner bootstrap authorization setting.
+- [x] 3. Add edit-state/audit models and migration.
+- [x] 4. Implement typed setting registry.
+- [x] 5. Extend setting/template repositories.
+- [x] 6. Implement owner edit/audit service.
+- [x] 7. Implement entity-aware template rendering.
+- [x] 8. Update user-facing template call sites.
+- [x] 9. Implement admin callbacks/keyboards.
+- [x] 10. Implement owner router and navigation.
+- [x] 11. Implement settings edit/reset.
+- [x] 12. Implement template edit/preview/reset.
+- [x] 13. Implement status/diagnostics.
+- [x] 14. Wire owner router before general user router.
+- [x] 15. Add tests and run CI.
+- [x] 16. Correctness/security review.
+- [x] 17. Performance/complexity review.
+- [x] 18. Final CI and documentation updates.
+
+## Progress notes
+
+### 2026-09-20 — implementation
+
+- Added environment bootstrap owner identity through `CINEGATE_OWNER_USER_ID`.
+- Added migration `0009` with durable `owner_edit_sessions` and `admin_audit_log`.
+- Added typed allowlisted setting/template registries.
+- Added Arabic owner control center with:
+  - messages/templates
+  - movie deletion
+  - search
+  - Ads/Mini App
+  - archive
+  - notifications
+  - status
+  - diagnostics
+- Added Edit / Preview / Reset / Cancel actions.
+- Added DB-backed settings with immediate runtime effect and no restart requirement.
+- Added recent safe audit metadata to diagnostics.
+- Owner router is explicitly wired before the general user router.
+
+### 2026-09-20 — review #1: correctness/security
+
+Findings and fixes:
+
+- Admin authorization is checked on every owner message and callback.
+- Forged non-owner callbacks are silently ignored.
+- Owner edit input is restricted to the owner's **private chat** so a message written in a group cannot accidentally mutate configuration.
+- Admin keys can only resolve through the typed registry; arbitrary callback keys cannot write arbitrary DB settings.
+- Edit state is durable rather than in-memory and survives service recreation/restart.
+- Mutations and audit entries commit in the same PostgreSQL transaction.
+- Same-value updates create no duplicate audit noise.
+- Rapid duplicate edit submissions are serialized per owner with a PostgreSQL transaction advisory lock; only one mutation wins.
+- Invalid setting/template input leaves the edit session active for correction and performs no mutation/audit.
+- Template variables are allowlisted and unknown variables are rejected.
+- Telegram entities are stored and remapped across variable replacement using UTF-16 offsets.
+- Formatting boundaries that split a variable token are rejected.
+- Telegram template length limits are enforced conservatively in UTF-16 units, including emoji.
+- Delivery captions now pass `caption_entities` to Telegram, so owner formatting is actually used rather than merely stored.
+- Sensitive bootstrap values (bot token, webhook secret, AdsGram callback secret, DB credentials) are not exposed in the owner panel.
+- Advanced raw Rich Message JSON authoring remains intentionally out of scope; the owner edits formatted Telegram messages instead.
+
+### 2026-09-20 — review #2: performance/complexity
+
+Confirmed:
+
+- No Redis/FSM/cache service is needed for admin correctness.
+- Ordinary non-owner messages hit the owner router only for cheap identity/chat checks; no admin DB lookup occurs for ordinary users.
+- One durable edit row exists per owner, not an unbounded edit-history state table.
+- Audit history is append-only and changes are infrequent.
+- Settings sections use batched DB reads.
+- User-facing template rendering uses the existing PostgreSQL template store and applies changes immediately without process restart.
+- No extra process/service was added.
+- Owner diagnostics use bounded problem/audit lists.
+
+### 2026-09-20 — final verification
+
+GitHub Actions with PostgreSQL 16:
+
+- Ruff: **all checks passed**
+- pytest: **176 passed**
+- PostgreSQL migrations: **0001 → 0009 passed**
+- full downgrade to base and restore to head: **passed**
+- Python compileall: **passed**
+
+The two warnings remain dependency deprecation notices from FastAPI/Starlette internals, not CineGate code.
 
 ## Completion summary
 
-Pending.
+Plan 0007 is complete.
+
+CineGate now has an owner-only Telegram control center with durable settings, formatted message templates, audit history, and diagnostics. Routine configuration changes apply from PostgreSQL without editing source files or restarting the service.
+
+**Deferred intentionally:** visual button-style customization and advanced Telegram Rich Message authoring remain in the dedicated presentation phase rather than exposing technical JSON or adding hot-path complexity here.
+
+**Next exact step:** create `plans/0008-historical-archive-import-and-reindex.md` before implementing the one-time UserBot historical migration, resumable archive backfill, progress reporting, and large-history validation.
