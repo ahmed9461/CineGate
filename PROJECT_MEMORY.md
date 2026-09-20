@@ -516,16 +516,77 @@ See `plans/0006-reward-delivery-and-deletion.md`.
 
 ---
 
-## 17. Pending decisions / information
+## 17. Implemented owner control center
+
+Plan 0007 completed the owner-only Telegram control center.
+
+Implemented:
+
+- `CINEGATE_OWNER_USER_ID` as environment bootstrap identity
+- owner router wired before general user routing
+- owner-only `/admin` panel
+- durable `owner_edit_sessions`
+- append-only `admin_audit_log`
+- DB-backed runtime settings with immediate effect and no restart
+- typed allowlisted setting registry
+- Arabic edit/preview/reset/cancel flows
+- status + diagnostics for movies, rewards, deletion, and recent audit actions
+- formatted Telegram template editing by sending normal formatted messages
+- Telegram entity persistence and UTF-16 offset remapping across variables
+- delivery `caption_entities` so owner formatting is used during actual delivery
+- admin callbacks/keys validated through registries
+- owner edit input accepted only from the owner's private chat
+- rapid duplicate owner mutations serialized transactionally
+
+Migration `0009` adds owner edit state and audit persistence.
+
+Latest Plan 0007 verification:
+
+- Ruff passed
+- **176 tests passed**
+- PostgreSQL migrations `0001 → 0009` passed
+- full downgrade to base and restore to head passed
+- compileall passed
+
+Advanced raw Rich Message JSON authoring and visual button-style customization remain intentionally deferred.
+
+See `plans/0007-owner-control-center.md`.
+
+---
+
+## 18. Historical import direction
+
+The one-time historical importer will use **Telethon 1.45.x** as an importer-only optional dependency.
+
+Confirmed direction:
+
+- importer is a separate CLI process, not part of the long-running CineGate service
+- UserBot session material is secret and must stay outside Git
+- Telegram API ID/hash are importer secrets/bootstrap configuration
+- owner supplies the original source channel and Archive Channel
+- source content protection must be disabled by an authorized owner before migration
+- importer does **not** bypass or toggle Telegram content protection
+- messages move oldest → newest to preserve sequence grouping
+- forwarding remains Telegram-side; CineGate does not download/re-upload movie media
+- source→archive message mapping is persisted for resume/idempotency
+- crash reconciliation must detect already-forwarded source posts before retrying
+- import runs in bounded batches and handles FloodWait without uncontrolled retries
+- bulk import suppresses per-movie owner notification spam
+- imported Archive messages are reindexed sequentially through existing indexing behavior
+- normal future publishing remains owner→Archive Channel + webhook indexing
+
+Full implementation belongs to Plan 0008.
+
+---
+
+## 19. Pending decisions / information
 
 Do not guess these:
 
 1. Production AdsGram platform/Block ID/public URL values.
 2. Production deployment topology/host and access-log redaction.
-3. Initial-import UserBot library/implementation.
-4. Final owner/admin menu behavior beyond Plan 0007.
-5. Final Rich Message editor/features.
-6. Real-time Archive Channel edit/delete reconciliation behavior.
-7. Durable global Telegram update sequencing before webhook concurrency is increased.
+3. Final Rich Message authoring feature set.
+4. Real-time Archive Channel edit/delete reconciliation behavior.
+5. Durable global Telegram update sequencing before webhook concurrency is increased.
 
 These should be resolved through explicit plans and recorded in `docs/DECISIONS.md`.
