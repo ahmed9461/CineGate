@@ -318,6 +318,115 @@ class AdminAuditLog(Base):
     )
 
 
+
+class ArchiveImportJob(Base):
+    __tablename__ = "archive_import_jobs"
+    __table_args__ = (
+        UniqueConstraint(
+            "source_channel_id",
+            "archive_channel_id",
+            name="uq_archive_import_jobs_source_archive",
+        ),
+        CheckConstraint(
+            "status IN ("
+            "'ready', 'running', 'paused', 'transferred', "
+            "'reindexing', 'completed', 'failed'"
+            ")",
+            name="ck_archive_import_jobs_status",
+        ),
+        Index(
+            "ix_archive_import_jobs_archive_status",
+            "archive_channel_id",
+            "status",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        primary_key=True,
+        default=uuid4,
+    )
+    source_channel_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    archive_channel_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="ready")
+    source_high_watermark_id: Mapped[int | None] = mapped_column(BigInteger)
+    archive_baseline_message_id: Mapped[int | None] = mapped_column(BigInteger)
+    last_copied_source_message_id: Mapped[int] = mapped_column(
+        BigInteger,
+        nullable=False,
+        default=0,
+    )
+    last_reindexed_source_message_id: Mapped[int] = mapped_column(
+        BigInteger,
+        nullable=False,
+        default=0,
+    )
+    source_total_estimate: Mapped[int | None] = mapped_column(BigInteger)
+    processed_messages: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    copied_messages: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    reconciled_messages: Mapped[int] = mapped_column(
+        BigInteger,
+        nullable=False,
+        default=0,
+    )
+    skipped_messages: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    reindexed_messages: Mapped[int] = mapped_column(
+        BigInteger,
+        nullable=False,
+        default=0,
+    )
+    missing_archive_messages: Mapped[int] = mapped_column(
+        BigInteger,
+        nullable=False,
+        default=0,
+    )
+    owner_progress_message_id: Mapped[int | None] = mapped_column(BigInteger)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_error: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+
+class ArchiveImportMessageMap(Base):
+    __tablename__ = "archive_import_message_map"
+    __table_args__ = (
+        UniqueConstraint(
+            "job_id",
+            "archive_message_id",
+            name="uq_archive_import_map_job_archive_message",
+        ),
+        Index(
+            "ix_archive_import_map_job_source",
+            "job_id",
+            "source_message_id",
+        ),
+    )
+
+    job_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("archive_import_jobs.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    source_message_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    archive_message_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    copied_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    reindexed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class AppSetting(Base):
     __tablename__ = "app_settings"
 
