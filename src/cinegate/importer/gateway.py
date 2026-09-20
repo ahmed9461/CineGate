@@ -6,7 +6,7 @@ from typing import Any
 
 from telethon import TelegramClient, errors
 
-from cinegate.importer.config import ImporterSettings
+from cinegate.importer.config import ImporterSettings, ImporterTelegramSettings
 from cinegate.importer.errors import (
     HistoricalImportError,
     ImportChannelAccessError,
@@ -24,7 +24,7 @@ class HistoricalTelegramGateway:
     def __init__(
         self,
         *,
-        settings: ImporterSettings,
+        settings: ImporterSettings | ImporterTelegramSettings,
         session_path: Path,
         flood_wait_limit: int = _DEFAULT_FLOOD_WAIT_LIMIT,
     ) -> None:
