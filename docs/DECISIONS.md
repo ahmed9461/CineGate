@@ -236,9 +236,75 @@ A four-digit title such as `1917` is not automatically stripped as release metad
 
 ---
 
+## D-023 — AdsGram is the initial rewarded-ad integration
+
+**Status:** Accepted  
+**Date:** 2026-09-20
+
+CineGate currently integrates AdsGram Reward for the first production ad path.
+
+The durable reward state machine is kept separate from the AdsGram SDK/web page, but CineGate does **not** introduce a generic multi-provider interface until a second provider is actually needed.
+
+**Reason:** Avoid unnecessary abstraction while preserving a clean boundary for future replacement.
+
+---
+
+## D-024 — Production reward requires dual proof
+
+**Status:** Accepted  
+**Date:** 2026-09-20
+
+A reward is not granted from Mini App JavaScript alone.
+
+Production reward requires:
+
+1. Telegram-signed Mini App client completion
+2. AdsGram Reward URL server confirmation
+
+The two signals are idempotent and may arrive in either order.
+
+Because AdsGram's documented Reward URL identifies only Telegram `userId`, CineGate allows one active reward session per user. A provider-only confirmation does not skip the current ad.
+
+---
+
+## D-025 — Earned rewards outlive ad-session expiry
+
+**Status:** Accepted  
+**Date:** 2026-09-20
+
+The session TTL applies only while waiting for the reward proof.
+
+Once a reward reaches `rewarded`, it remains deliverable even if the original ad-session expiry timestamp passes.
+
+Telegram delivery failure must return the request to `rewarded`; the user must not watch another ad for the same earned reward.
+
+---
+
+## D-026 — Delivery deletion is durable but bounded by Telegram's 48-hour limit
+
+**Status:** Accepted  
+**Date:** 2026-09-20
+
+CineGate persists delete deadlines and retries transient failures with a durable worker.
+
+Telegram's Bot API only permits deleting messages sent less than 48 hours ago. If an outage or permanent Telegram error makes deletion impossible, CineGate records `delete_failed` rather than falsely marking the message deleted.
+
+---
+
+## D-027 — Deletion worker uses PostgreSQL coordination, not a task broker
+
+**Status:** Accepted  
+**Date:** 2026-09-20
+
+Due deletions are claimed in bounded batches using `FOR UPDATE SKIP LOCKED`. Stale `sending` and `deleting` states are reconciled periodically.
+
+Redis/Celery/message brokers remain unnecessary for the current workload.
+
+---
+
 # Pending decisions
 
-- Ad provider
+- Production AdsGram credentials/platform values
 - UserBot implementation library
 - Hosting/deployment model
 - Telegram Bot API/client feature versions
