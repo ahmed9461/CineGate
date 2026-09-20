@@ -218,52 +218,64 @@ class HistoricalImportService:
             archive = await self._gateway.resolve_channel(job.archive_channel_id)
             await self._ensure_archive_setting(job.archive_channel_id)
 
-            if job.status != "completed":
+            if job.status != "completed" or full:
                 job = await self._mark_reindexing(job.id)
                 await self._report(job)
 
             after_source_id = 0 if full else job.last_reindexed_source_message_id
 
-            while True:
-                mappings = await self._list_mappings(
-                    job_id=job.id,
-                    after_source_message_id=after_source_id,
-                )
-                if not mappings:
-                    break
-
-                archive_ids = [mapping.archive_message_id for mapping in mappings]
-                messages = await self._gateway.get_messages_by_ids(
-                    archive,
-                    archive_ids,
-                )
-                if len(messages) != len(mappings):
-                    raise HistoricalImportError(
-                        "archive message lookup returned an unexpected result length"
+            try:
+                while True:
+                    mappings = await self._list_mappings(
+                        job_id=job.id,
+                        after_source_message_id=after_source_id,
                     )
+                    if not mappings:
+                        break
 
-                for mapping, message in zip(mappings, messages, strict=True):
-                    if message is None:
-                        await self._mark_reindexed(
-                            job_id=job.id,
-                            source_message_id=mapping.source_message_id,
-                            missing=True,
-                        )
-                    else:
-                        await self._indexer.ingest(
-                            channel_id=job.archive_channel_id,
-                            message=telethon_message_to_archive(message),
-                        )
-                        await self._mark_reindexed(
-                            job_id=job.id,
-                            source_message_id=mapping.source_message_id,
-                            missing=False,
+                    archive_ids = [
+                        mapping.archive_message_id
+                        for mapping in mappings
+                    ]
+                    messages = await self._gateway.get_messages_by_ids(
+                        archive,
+                        archive_ids,
+                    )
+                    if len(messages) != len(mappings):
+                        raise HistoricalImportError(
+                            "archive message lookup returned an unexpected result length"
                         )
 
-                    after_source_id = mapping.source_message_id
+                    for mapping, message in zip(mappings, messages, strict=True):
+                        if message is None:
+                            await self._mark_reindexed(
+                                job_id=job.id,
+                                source_message_id=mapping.source_message_id,
+                                missing=True,
+                            )
+                        else:
+                            await self._indexer.ingest(
+                                channel_id=job.archive_channel_id,
+                                message=telethon_message_to_archive(message),
+                            )
+                            await self._mark_reindexed(
+                                job_id=job.id,
+                                source_message_id=mapping.source_message_id,
+                                missing=False,
+                            )
 
-                job = await self._get_job_required(job.id)
+                        after_source_id = mapping.source_message_id
+
+                    job = await self._get_job_required(job.id)
+                    await self._report(job)
+            except ImportChannelAccessError as exc:
+                job = await self._mark_failed(job.id, str(exc))
                 await self._report(job)
+                raise
+            except HistoricalImportError as exc:
+                job = await self._mark_paused(job.id, str(exc))
+                await self._report(job)
+                raise
 
             if job.status != "completed":
                 job = await self._mark_completed(job.id)
