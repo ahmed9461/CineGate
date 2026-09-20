@@ -157,8 +157,8 @@ def _bounded_init_data_max_age(value: int | None) -> int:
 
 
 def _reward_page_html(*, session_id: UUID, quality: str, block_id: str) -> str:
-    block_id_json = json.dumps(block_id)
-    session_id_json = json.dumps(str(session_id))
+    block_id_json = _json_for_script(block_id)
+    session_id_json = _json_for_script(str(session_id))
     quality_html = html.escape(quality)
 
     return f"""<!doctype html>
@@ -238,6 +238,15 @@ def _reward_page_html(*, session_id: UUID, quality: str, block_id: str) -> str:
   </script>
 </body>
 </html>"""
+
+
+def _json_for_script(value: str) -> str:
+    return (
+        json.dumps(value)
+        .replace("<", "\\u003c")
+        .replace(">", "\\u003e")
+        .replace("&", "\\u0026")
+    )
 
 
 def _unavailable_page(message: str) -> str:
