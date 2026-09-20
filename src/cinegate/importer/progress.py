@@ -69,13 +69,14 @@ class ImportProgressReporter:
             and status_changed
         )
         if (
-            job.owner_progress_message_id is not None
-            and not force_update
+            not force_update
+            and self._last_telegram_at > 0
             and now - self._last_telegram_at < self._telegram_min_interval
         ):
             self._last_status = job.status
             return
 
+        self._last_telegram_at = now
         owner_chat_id = await self._owner_chat_id()
         if owner_chat_id is None:
             self._last_status = job.status
@@ -102,9 +103,6 @@ class ImportProgressReporter:
                 "Could not update historical-import owner progress",
                 exc_info=True,
             )
-        else:
-            self._last_telegram_at = now
-
         self._last_status = job.status
 
     async def close(self) -> None:
