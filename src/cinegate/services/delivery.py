@@ -5,8 +5,8 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from aiogram import Bot
-from aiogram.types import MessageEntity
 from aiogram.exceptions import TelegramAPIError
+from aiogram.types import MessageEntity
 from sqlalchemy import func, select, update
 
 from cinegate.db.models import Delivery, Movie, MovieQuality, RewardSession
