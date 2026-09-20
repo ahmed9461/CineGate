@@ -57,6 +57,7 @@ def build_reward_router() -> APIRouter:
                 session_id=reward.id,
                 quality=reward.quality,
                 block_id=block_id.strip(),
+                reward_status=reward.status,
             )
         )
 
@@ -156,9 +157,16 @@ def _bounded_init_data_max_age(value: int | None) -> int:
     return max(_MIN_INIT_DATA_MAX_AGE, min(_MAX_INIT_DATA_MAX_AGE, value))
 
 
-def _reward_page_html(*, session_id: UUID, quality: str, block_id: str) -> str:
+def _reward_page_html(
+    *,
+    session_id: UUID,
+    quality: str,
+    block_id: str,
+    reward_status: str,
+) -> str:
     block_id_json = _json_for_script(block_id)
     session_id_json = _json_for_script(str(session_id))
+    reward_status_json = _json_for_script(reward_status)
     quality_html = html.escape(quality)
 
     return f"""<!doctype html>
@@ -187,6 +195,7 @@ def _reward_page_html(*, session_id: UUID, quality: str, block_id: str) -> str:
 
     const blockId = {block_id_json};
     const sessionId = {session_id_json};
+    const rewardStatus = {reward_status_json};
     const button = document.getElementById("watch");
     const statusBox = document.getElementById("status");
     const controller = window.Adsgram.init({{ blockId }});
