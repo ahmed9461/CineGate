@@ -340,6 +340,27 @@ class ArchiveImportRepository:
         return job
 
 
+async def is_historical_import_message(
+    session: AsyncSession,
+    *,
+    archive_channel_id: int,
+    archive_message_id: int,
+) -> bool:
+    value = await session.scalar(
+        select(ArchiveImportMessageMap.source_message_id)
+        .join(
+            ArchiveImportJob,
+            ArchiveImportJob.id == ArchiveImportMessageMap.job_id,
+        )
+        .where(
+            ArchiveImportJob.archive_channel_id == archive_channel_id,
+            ArchiveImportMessageMap.archive_message_id == archive_message_id,
+        )
+        .limit(1)
+    )
+    return value is not None
+
+
 async def is_bulk_import_active(
     session: AsyncSession,
     archive_channel_id: int,
