@@ -15,6 +15,7 @@ from cinegate.services.movie_search import MovieSearchService
 from cinegate.services.owner_notifier import OwnerArchiveNotifier
 from cinegate.services.reward_sessions import RewardSessionService
 from cinegate.services.search_sessions import SearchSessionService
+from cinegate.services.templates import TemplateService
 from cinegate.workers.deletion import DeliveryDeletionWorker
 
 
@@ -61,7 +62,8 @@ def build_runtime(settings: SecretsSettings | None = None) -> AppRuntime:
     search = MovieSearchService(database)
     search_sessions = SearchSessionService(database)
     rewards = RewardSessionService(database)
-    delivery = DeliveryService(database, bot)
+    templates = TemplateService(database)
+    delivery = DeliveryService(database, bot, templates=templates)
     deletion_worker = DeliveryDeletionWorker(
         delivery_service=delivery,
         bot=bot,
@@ -75,6 +77,7 @@ def build_runtime(settings: SecretsSettings | None = None) -> AppRuntime:
             search=search,
             sessions=search_sessions,
             rewards=rewards,
+            templates=templates,
         )
     )
 
