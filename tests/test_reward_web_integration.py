@@ -354,3 +354,60 @@ async def test_adsgram_block_id_is_escaped_before_embedding_in_script(setup) -> 
     assert response.status_code == 200
     assert malicious not in response.text
     assert "\\u003c/script\\u003e" in response.text
+
+
+
+@pytest.mark.asyncio
+async def test_provider_only_page_still_requires_current_ad(setup) -> None:
+    database, _runtime, reward, client = setup
+    await set_setting(database, "adsgram_block_id", "12345")
+
+    async with database.session() as session, session.begin():
+        row = await session.get(RewardSession, reward.id)
+        assert row is not None
+        row.status = "provider_confirmed"
+        row.provider_confirmed_at = datetime.now(UTC)
+
+    response = await client.get(f"/miniapp/reward/{reward.id}")
+
+    assert response.status_code == 200
+    assert 'const rewardStatus = "provider_confirmed"' in response.text
+    assert 'rewardStatus === "provider_confirmed"' in response.text
+    assert "continueExistingReward();" in response.text
+
+
+@pytest.mark.asyncio
+async def test_client_completed_page_can_resume_without_second_ad(setup) -> None:
+    database, _runtime, reward, client = setup
+    await set_setting(database, "adsgram_block_id", "12345")
+
+    async with database.session() as session, session.begin():
+        row = await session.get(RewardSession, reward.id)
+        assert row is not None
+        row.status = "client_completed"
+        row.client_completed_at = datetime.now(UTC)
+
+    response = await client.get(f"/miniapp/reward/{reward.id}")
+
+    assert response.status_code == 200
+    assert 'const rewardStatus = "client_completed"' in response.text
+    assert "else if (!needsAd)" in response.text
+
+
+@pytest.mark.asyncio
+async def test_delivered_reward_page_does_not_offer_another_ad(setup) -> None:
+    database, _runtime, reward, client = setup
+    await set_setting(database, "adsgram_block_id", "12345")
+
+    async with database.session() as session, session.begin():
+        row = await session.get(RewardSession, reward.id)
+        assert row is not None
+        row.status = "delivered"
+        row.delivered_at = datetime.now(UTC)
+
+    response = await client.get(f"/miniapp/reward/{reward.id}")
+
+    assert response.status_code == 200
+    assert 'const rewardStatus = "delivered"' in response.text
+    assert 'button.hidden = true' in response.text
+    assert "تم إرسال الفيلم بالفعل" in response.text
