@@ -12,6 +12,16 @@ from cinegate.db.models import ArchiveImportJob, ArchiveImportMessageMap
 
 _ACTIVE_BULK_STATUSES = ("running", "reindexing")
 
+_ALLOWED_TRANSITIONS: dict[str, frozenset[str]] = {
+    "ready": frozenset({"running", "failed"}),
+    "running": frozenset({"paused", "failed", "transferred"}),
+    "paused": frozenset({"running", "failed"}),
+    "failed": frozenset({"running"}),
+    "transferred": frozenset({"running", "reindexing"}),
+    "reindexing": frozenset({"paused", "failed", "completed"}),
+    "completed": frozenset({"reindexing"}),
+}
+
 
 @dataclass(frozen=True, slots=True)
 class ImportJobSnapshot:
@@ -117,7 +127,7 @@ class ArchiveImportRepository:
 
     async def mark_running(self, job_id: UUID) -> ImportJobSnapshot:
         job = await self._require_job(job_id, lock=True)
-        job.status = "running"
+        _transition(job, "running")
         job.started_at = job.started_at or datetime.now(UTC)
         job.completed_at = None
         job.last_error = None
@@ -125,31 +135,31 @@ class ArchiveImportRepository:
 
     async def mark_paused(self, job_id: UUID, error: str) -> ImportJobSnapshot:
         job = await self._require_job(job_id, lock=True)
-        job.status = "paused"
+        _transition(job, "paused")
         job.last_error = _bounded_error(error)
         return _snapshot(job)
 
     async def mark_failed(self, job_id: UUID, error: str) -> ImportJobSnapshot:
         job = await self._require_job(job_id, lock=True)
-        job.status = "failed"
+        _transition(job, "failed")
         job.last_error = _bounded_error(error)
         return _snapshot(job)
 
     async def mark_transferred(self, job_id: UUID) -> ImportJobSnapshot:
         job = await self._require_job(job_id, lock=True)
-        job.status = "transferred"
+        _transition(job, "transferred")
         job.last_error = None
         return _snapshot(job)
 
     async def mark_reindexing(self, job_id: UUID) -> ImportJobSnapshot:
         job = await self._require_job(job_id, lock=True)
-        job.status = "reindexing"
+        _transition(job, "reindexing")
         job.last_error = None
         return _snapshot(job)
 
     async def mark_completed(self, job_id: UUID) -> ImportJobSnapshot:
         job = await self._require_job(job_id, lock=True)
-        job.status = "completed"
+        _transition(job, "completed")
         job.completed_at = datetime.now(UTC)
         job.last_error = None
         return _snapshot(job)
@@ -381,3 +391,16 @@ def _mapping(row: ArchiveImportMessageMap) -> ImportMessageMapping:
 
 def _bounded_error(error: str) -> str:
     return error[:2000]
+
+
+
+def _transition(job: ArchiveImportJob, target: str) -> None:
+    if job.status == target:
+        return
+
+    allowed = _ALLOWED_TRANSITIONS.get(job.status, frozenset())
+    if target not in allowed:
+        raise RuntimeError(
+            f"invalid import status transition: {job.status} -> {target}"
+        )
+    job.status = target
