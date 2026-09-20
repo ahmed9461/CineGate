@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 
 from sqlalchemy import func, select
 
@@ -39,6 +40,16 @@ class FailedDeletion:
 
 
 @dataclass(frozen=True, slots=True)
+class RecentAudit:
+    audit_id: int
+    owner_user_id: int
+    action: str
+    target_type: str
+    target_key: str
+    created_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
 class DiagnosticsSnapshot:
     indexed_movies: int
     pending_movies: int
@@ -52,6 +63,7 @@ class DiagnosticsSnapshot:
     audit_entries: int
     problem_movies: tuple[ProblemMovie, ...]
     failed_deletions: tuple[FailedDeletion, ...]
+    recent_audits: tuple[RecentAudit, ...]
 
 
 class AdminDiagnosticsService:
@@ -113,6 +125,24 @@ class AdminDiagnosticsService:
                 await session.scalar(select(func.count(AdminAuditLog.id))) or 0
             )
 
+            audits = (
+                await session.execute(
+                    select(
+                        AdminAuditLog.id,
+                        AdminAuditLog.owner_user_id,
+                        AdminAuditLog.action,
+                        AdminAuditLog.target_type,
+                        AdminAuditLog.target_key,
+                        AdminAuditLog.created_at,
+                    )
+                    .order_by(
+                        AdminAuditLog.created_at.desc(),
+                        AdminAuditLog.id.desc(),
+                    )
+                    .limit(problem_limit)
+                )
+            ).all()
+
             failures = (
                 await session.execute(
                     select(
@@ -155,5 +185,16 @@ class AdminDiagnosticsService:
                     last_error=row.last_error,
                 )
                 for row in failures
+            ),
+            recent_audits=tuple(
+                RecentAudit(
+                    audit_id=row.id,
+                    owner_user_id=row.owner_user_id,
+                    action=row.action,
+                    target_type=row.target_type,
+                    target_key=row.target_key,
+                    created_at=row.created_at,
+                )
+                for row in audits
             ),
         )
