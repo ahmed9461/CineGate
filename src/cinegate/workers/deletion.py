@@ -26,26 +26,32 @@ class DeliveryDeletionWorker:
         delivery_service: DeliveryService,
         bot: Bot,
         poll_seconds: float = 1.0,
+        recovery_seconds: float = 60.0,
         batch_size: int = 50,
         concurrency: int = 10,
     ) -> None:
         if poll_seconds <= 0:
             raise ValueError("poll_seconds must be positive")
+        if recovery_seconds <= 0:
+            raise ValueError("recovery_seconds must be positive")
         self._delivery_service = delivery_service
         self._bot = bot
         self._poll_seconds = poll_seconds
+        self._recovery_seconds = recovery_seconds
         self._batch_size = max(1, min(100, batch_size))
         self._concurrency = max(1, min(25, concurrency))
 
     async def run(self, stop_event: asyncio.Event) -> None:
-        recovered = False
+        loop = asyncio.get_running_loop()
+        next_recovery_at = 0.0
 
         while not stop_event.is_set():
             try:
-                if not recovered:
+                now = loop.time()
+                if now >= next_recovery_at:
                     await self._delivery_service.recover_stale_sends()
                     await self._delivery_service.recover_stale_deletions()
-                    recovered = True
+                    next_recovery_at = loop.time() + self._recovery_seconds
 
                 due = await self._delivery_service.claim_due_deletions(
                     limit=self._batch_size
@@ -80,7 +86,16 @@ class DeliveryDeletionWorker:
         semaphore: asyncio.Semaphore,
     ) -> None:
         async with semaphore:
-            await self._delete_one(item)
+            try:
+                await self._delete_one(item)
+            except Exception:
+                # Telegram may already have applied the deletion while
+                # PostgreSQL was temporarily unavailable. Keep the worker
+                # alive; periodic stale-state recovery will reconcile it.
+                logger.exception(
+                    "Deletion state persistence failed delivery_id=%s",
+                    item.delivery_id,
+                )
 
     async def _delete_one(self, item: DueDeletion) -> None:
         try:
@@ -113,7 +128,6 @@ class DeliveryDeletionWorker:
             )
         else:
             await self._delivery_service.mark_deleted(item.delivery_id)
-
 
 
 def _is_missing_message_error(exc: TelegramBadRequest) -> bool:
