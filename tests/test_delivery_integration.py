@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 
 import pytest
@@ -245,3 +246,40 @@ async def test_telegram_copy_failure_keeps_reward_reusable(setup) -> None:
 
     assert retried.status == "delivered"
     assert len(bot.copies) == 2
+
+
+
+@pytest.mark.asyncio
+async def test_stale_sending_state_recovers_to_rewarded(setup) -> None:
+    database, _bot, delivery, reward, _quality_id = setup
+
+    result = await delivery._prepare(reward.id)
+    assert not hasattr(result, "status")
+
+    async with database.session() as session, session.begin():
+        delivery_row = await session.scalar(
+            select(Delivery).where(Delivery.reward_session_id == reward.id)
+        )
+        reward_row = await session.get(RewardSession, reward.id)
+        assert delivery_row is not None
+        assert reward_row is not None
+        delivery_row.status = "sending"
+        delivery_row.send_started_at = datetime.now(UTC) - timedelta(minutes=10)
+        reward_row.status = "delivering"
+        reward_row.delivery_started_at = datetime.now(UTC) - timedelta(minutes=10)
+
+    recovered = await delivery.recover_stale_sends(stale_seconds=60)
+
+    async with database.session() as session:
+        delivery_row = await session.scalar(
+            select(Delivery).where(Delivery.reward_session_id == reward.id)
+        )
+        reward_row = await session.get(RewardSession, reward.id)
+
+    assert recovered == 1
+    assert delivery_row is not None
+    assert delivery_row.status == "pending"
+    assert delivery_row.send_started_at is None
+    assert reward_row is not None
+    assert reward_row.status == "rewarded"
+    assert reward_row.delivery_started_at is None
