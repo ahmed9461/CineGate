@@ -8,9 +8,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 _API_HASH_RE = re.compile(r"^[0-9a-fA-F]{32}$")
 
 
-class ImporterSettings(BaseSettings):
-    """Secrets/bootstrap required only by the one-time UserBot importer."""
-
+class _ImporterBaseSettings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
         env_prefix="CINEGATE_",
@@ -18,9 +16,9 @@ class ImporterSettings(BaseSettings):
         extra="ignore",
     )
 
+
+class ImporterDatabaseSettings(_ImporterBaseSettings):
     database_url: SecretStr
-    telegram_api_id: int
-    telegram_api_hash: SecretStr
 
     @field_validator("database_url")
     @classmethod
@@ -28,6 +26,11 @@ class ImporterSettings(BaseSettings):
         if not value.get_secret_value().startswith("postgresql+asyncpg://"):
             raise ValueError("database_url must use postgresql+asyncpg")
         return value
+
+
+class ImporterTelegramSettings(_ImporterBaseSettings):
+    telegram_api_id: int
+    telegram_api_hash: SecretStr
 
     @field_validator("telegram_api_id")
     @classmethod
@@ -42,3 +45,27 @@ class ImporterSettings(BaseSettings):
         if not _API_HASH_RE.fullmatch(value.get_secret_value()):
             raise ValueError("telegram_api_hash must be a 32-character hex value")
         return value
+
+
+class ImporterSettings(_ImporterBaseSettings):
+    """Full settings required by transfer/reindex/verify commands."""
+
+    database_url: SecretStr
+    telegram_api_id: int
+    telegram_api_hash: SecretStr
+
+    _database_validator = field_validator("database_url")(
+        ImporterDatabaseSettings.validate_database_url.__func__
+    )
+    _api_id_validator = field_validator("telegram_api_id")(
+        ImporterTelegramSettings.validate_api_id.__func__
+    )
+    _api_hash_validator = field_validator("telegram_api_hash")(
+        ImporterTelegramSettings.validate_api_hash.__func__
+    )
+
+
+class ImporterProgressSettings(_ImporterBaseSettings):
+    """Optional Bot API credential used only for owner progress reporting."""
+
+    bot_token: SecretStr | None = None
