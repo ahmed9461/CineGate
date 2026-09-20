@@ -81,7 +81,7 @@ async def test_status_command_needs_database_only(
     assert exit_code == 0
     assert f"job={job.id}" in captured.out
     assert "source_high=500" in captured.out
-    assert "processed=0/450" in captured.out
+    assert "المعالجة: 0/450" in captured.out
 
 
 @pytest.mark.asyncio
