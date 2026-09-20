@@ -195,6 +195,8 @@ async def test_diagnostics_counts_and_problem_lists(database: Database) -> None:
     assert snapshot.sent_waiting_delete == 1
     assert snapshot.delete_failed == 1
     assert snapshot.audit_entries == 1
+    assert len(snapshot.recent_audits) == 1
+    assert snapshot.recent_audits[0].target_key == "search_result_limit"
     assert {movie.status for movie in snapshot.problem_movies} == {
         "orphan",
         "ambiguous",
