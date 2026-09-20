@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import asyncio
 import os
+from datetime import UTC, datetime, timedelta
 
 import pytest
 import pytest_asyncio
-from sqlalchemy import delete
+from sqlalchemy import delete, update
 
 from cinegate.db.models import ArchiveImportJob, ArchiveImportMessageMap
 from cinegate.db.session import Database
@@ -263,3 +264,25 @@ async def test_invalid_import_status_transition_is_rejected(
 
         with pytest.raises(RuntimeError, match="invalid import status transition"):
             await repository.mark_completed(job.id)
+
+
+
+@pytest.mark.asyncio
+async def test_stale_running_job_does_not_suppress_notifications_forever(
+    database: Database,
+) -> None:
+    async with database.session() as session, session.begin():
+        repository = ArchiveImportRepository(session)
+        job = await repository.get_or_create_job(
+            source_channel_id=SOURCE_ID,
+            archive_channel_id=ARCHIVE_ID,
+        )
+        await repository.mark_running(job.id)
+        await session.execute(
+            update(ArchiveImportJob)
+            .where(ArchiveImportJob.id == job.id)
+            .values(updated_at=datetime.now(UTC) - timedelta(minutes=31))
+        )
+
+    async with database.session() as session:
+        assert not await is_bulk_import_active(session, ARCHIVE_ID)
