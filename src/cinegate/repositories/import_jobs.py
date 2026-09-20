@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
-from sqlalchemy import func, select, text, update
+from sqlalchemy import func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -344,13 +344,13 @@ async def is_bulk_import_active(
     session: AsyncSession,
     archive_channel_id: int,
 ) -> bool:
+    cutoff = datetime.now(UTC) - timedelta(minutes=30)
     value = await session.scalar(
         select(ArchiveImportJob.id)
         .where(
             ArchiveImportJob.archive_channel_id == archive_channel_id,
             ArchiveImportJob.status.in_(_ACTIVE_BULK_STATUSES),
-            ArchiveImportJob.updated_at
-            >= func.now() - text("interval '30 minutes'"),
+            ArchiveImportJob.updated_at >= cutoff,
         )
         .limit(1)
     )
