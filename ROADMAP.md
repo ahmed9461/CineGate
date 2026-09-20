@@ -76,27 +76,29 @@ This roadmap is directional. Every phase requires its own detailed plan file bef
 
 ## Phase 6 — Rewarded advertisement flow
 
-- [ ] Choose provider
-- [ ] Confirm incentivized/rewarded traffic policy
-- [ ] Mini App integration
-- [ ] Signed Telegram identity validation
-- [ ] Reward session state machine
-- [ ] Server-side reward verification/callback
-- [ ] Replay/duplicate protection
-- [ ] Failure/retry UX
-- [ ] Preserve completed reward if delivery temporarily fails
+- [x] Choose initial provider (AdsGram)
+- [x] Confirm rewarded integration model
+- [x] Mini App integration
+- [x] Signed Telegram identity validation
+- [x] Reward session state machine
+- [x] Server-side reward verification/callback
+- [x] Replay/duplicate protection
+- [x] Failure/retry UX
+- [x] Preserve completed reward if delivery temporarily fails
 
 ## Phase 7 — Delivery & durable deletion
 
-- [ ] Copy selected archive quality to user
-- [ ] Template variable rendering
-- [ ] Persist delivery message ID
-- [ ] Persist expiration/deletion deadline
-- [ ] Durable deletion worker
-- [ ] Restart reconciliation
-- [ ] Retry failures
-- [ ] Ensure poster remains untouched
+- [x] Copy selected archive quality to user
+- [x] Template variable rendering
+- [x] Persist delivery message ID
+- [x] Persist expiration/deletion deadline
+- [x] Durable deletion worker
+- [x] Restart reconciliation
+- [x] Retry failures
+- [x] Ensure poster remains untouched
 - [ ] Owner-configurable deletion duration
+
+**Reward/delivery implementation:** `plans/0006-reward-delivery-and-deletion.md`
 
 ## Phase 8 — Owner/admin control center
 
