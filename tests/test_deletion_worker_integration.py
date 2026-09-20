@@ -7,7 +7,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 import pytest_asyncio
 from aiogram.exceptions import TelegramAPIError, TelegramBadRequest
-from sqlalchemy import delete, select
+from sqlalchemy import delete
 
 from cinegate.db.models import (
     AppSetting,
