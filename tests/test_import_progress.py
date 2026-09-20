@@ -173,3 +173,38 @@ def test_final_progress_text_contains_all_import_counters() -> None:
     assert "تم التجاهل: 5" in text
     assert "تمت إعادة الفهرسة: 94" in text
     assert "مفقود في الأرشيف: 1" in text
+
+
+
+@pytest.mark.asyncio
+async def test_cli_progress_is_rate_limited_between_same_phase_updates(
+    database: Database,
+) -> None:
+    async with database.session() as session, session.begin():
+        repository = ArchiveImportRepository(session)
+        job = await repository.get_or_create_job(
+            source_channel_id=SOURCE_ID,
+            archive_channel_id=ARCHIVE_ID,
+        )
+        running = await repository.mark_running(job.id)
+
+    clock = [10.0]
+    printed = []
+
+    reporter = ImportProgressReporter(
+        database=database,
+        bot_token=None,
+        cli_min_interval=1.0,
+        printer=printed.append,
+        monotonic=lambda: clock[0],
+    )
+
+    await reporter(running)
+    clock[0] = 10.2
+    await reporter(replace(running, processed_messages=25))
+    clock[0] = 11.2
+    await reporter(replace(running, processed_messages=50))
+
+    assert len(printed) == 2
+    assert "processed=0" in printed[0]
+    assert "processed=50" in printed[1]
