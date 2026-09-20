@@ -164,6 +164,14 @@ def diagnostics_text(snapshot: DiagnosticsSnapshot) -> str:
                 f"  {error}"
             )
 
+    if snapshot.recent_audits:
+        lines.extend(["", "آخر تغييرات المالك:"])
+        for audit in snapshot.recent_audits:
+            lines.append(
+                f"• #{audit.audit_id} {audit.action} "
+                f"{audit.target_type}:{audit.target_key}"
+            )
+
     return "\n".join(lines)
 
 
