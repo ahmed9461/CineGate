@@ -173,19 +173,27 @@ Security requirements:
 
 ## 5. Rewarded advertisements
 
-- A selected quality requires completion of one rewarded advertisement before delivery.
-- Ad provider/network is **not finalized yet**.
-- Provider must allow rewarded/incentivized traffic and provide a reliable completion/reward signal suitable for server-side verification.
-- Do not unlock delivery merely because the Mini App was opened.
-- A reward session must bind at minimum:
-  - Telegram user
-  - movie
-  - selected quality
-  - archive message reference
-  - reward status
-  - timestamps
-- One reward must not be reusable to unlock unrelated qualities.
-- If reward succeeds but delivery temporarily fails, system should preserve rewarded state so the user is not unfairly forced to watch another ad for the same pending delivery.
+Plan 0006 implemented the first rewarded-ad integration with **AdsGram**.
+
+Confirmed behavior:
+
+- A selected quality requires a rewarded ad before delivery.
+- Opening the Mini App alone never unlocks content.
+- Production reward requires both:
+  1. Telegram-signed Mini App client completion
+  2. AdsGram Reward URL server confirmation
+- Reward sessions bind the exact Telegram user + movie + `movie_qualities` row.
+- Only one active reward session is allowed per Telegram user because AdsGram's documented Reward URL identifies the Telegram user but not a CineGate session.
+- Provider-only confirmation does not let a newly opened session skip the current ad.
+- Client-completed/rewarded sessions can resume without forcing another ad.
+- Earned reward survives Telegram delivery failure and the original ad-session TTL.
+- Duplicate client/provider callbacks are idempotent.
+- Production AdsGram Block ID/public URL remain DB runtime settings.
+- The AdsGram callback bearer secret remains environment-only.
+
+CineGate does **not** currently implement a generic multi-provider interface. AdsGram-specific web integration is isolated, while the durable reward state machine is independent of the ad SDK. A generic provider abstraction should only be introduced if a second provider is actually added.
+
+See `plans/0006-reward-delivery-and-deletion.md` and `docs/SECURITY.md`.
 
 ---
 
@@ -468,15 +476,56 @@ See `plans/0005-search-and-movie-page.md`.
 
 ---
 
-## 16. Pending decisions / information
+## 16. Implemented reward, delivery, and deletion
+
+Plan 0006 completed the post-quality flow.
+
+Implemented:
+
+- exact reward sessions with UUID IDs
+- one active reward per Telegram user
+- signed Telegram Mini App identity validation
+- AdsGram Reward URL confirmation
+- dual client/provider reward proof
+- reward-prompt duplicate-click protection
+- dynamic owner-editable delivery caption body
+- `%movie%`, `%year%`, `%quality%`, `%time%`
+- exact Archive Channel quality copy via Telegram
+- no movie file download/re-upload by CineGate
+- `protect_content=False` so users can save/forward before expiry
+- persistent delivery and deletion state
+- durable delete deadlines
+- transient retry/backoff
+- stale `sending`/`deleting` recovery
+- periodic reconciliation while the process remains running
+- bounded concurrent deletion with PostgreSQL `SKIP LOCKED`
+- explicit `delete_failed` state for deletion that Telegram can no longer perform
+- no false “deleted” state after Telegram's 48-hour deletion window
+
+Migrations now reach `0008`.
+
+Latest full code verification before documentation closeout:
+
+- Ruff passed
+- **137 tests passed**
+- PostgreSQL migrations `0001 → 0008` passed
+- full downgrade to base and restore to head passed
+- compileall passed
+
+See `plans/0006-reward-delivery-and-deletion.md`.
+
+---
+
+## 17. Pending decisions / information
 
 Do not guess these:
 
-1. Rewarded-ad network/provider.
-2. Production deployment topology/host.
+1. Production AdsGram platform/Block ID/public URL values.
+2. Production deployment topology/host and access-log redaction.
 3. Initial-import UserBot library/implementation.
-4. Final owner/admin menu layout.
-5. Exact Telegram Bot API/client feature versions for rich-message capabilities.
-6. Real-time archive edit/delete reconciliation behavior.
+4. Final owner/admin menu behavior beyond Plan 0007.
+5. Final Rich Message editor/features.
+6. Real-time Archive Channel edit/delete reconciliation behavior.
+7. Durable global Telegram update sequencing before webhook concurrency is increased.
 
 These should be resolved through explicit plans and recorded in `docs/DECISIONS.md`.
