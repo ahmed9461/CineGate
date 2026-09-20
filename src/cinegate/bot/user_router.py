@@ -393,7 +393,7 @@ async def _cleanup_previous_ui(
 
 
 async def _safe_delete(bot: Bot, chat_id: int, message_id: int) -> None:
-    with suppress(TelegramBadRequest):
+    with suppress(TelegramAPIError):
         await bot.delete_message(chat_id=chat_id, message_id=message_id)
 
 
@@ -403,5 +403,5 @@ async def _safe_callback_answer(
     *,
     show_alert: bool = False,
 ) -> None:
-    with suppress(TelegramBadRequest):
+    with suppress(TelegramAPIError):
         await callback.answer(text=text, show_alert=show_alert)
