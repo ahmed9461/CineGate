@@ -11,6 +11,7 @@ from cinegate.admin.diagnostics import AdminDiagnosticsService
 from cinegate.db.models import (
     AdminAuditLog,
     AppSetting,
+    ArchiveImportJob,
     Delivery,
     MessageTemplate,
     Movie,
@@ -150,6 +151,25 @@ async def test_diagnostics_counts_and_problem_lists(database: Database) -> None:
         session.add_all([rewarded, sent_reward, failed_reward])
         await session.flush()
 
+        import_job = ArchiveImportJob(
+            source_channel_id=-1001111111111,
+            archive_channel_id=ARCHIVE_CHANNEL_ID,
+            status="completed",
+            source_high_watermark_id=500,
+            archive_baseline_message_id=50,
+            last_copied_source_message_id=500,
+            last_reindexed_source_message_id=500,
+            source_total_estimate=450,
+            processed_messages=450,
+            copied_messages=440,
+            reconciled_messages=3,
+            skipped_messages=10,
+            reindexed_messages=438,
+            missing_archive_messages=2,
+            completed_at=now,
+        )
+        session.add(import_job)
+
         session.add_all(
             [
                 Delivery(
@@ -195,6 +215,12 @@ async def test_diagnostics_counts_and_problem_lists(database: Database) -> None:
     assert snapshot.sent_waiting_delete == 1
     assert snapshot.delete_failed == 1
     assert snapshot.audit_entries == 1
+    assert snapshot.latest_import is not None
+    assert snapshot.latest_import.status == "completed"
+    assert snapshot.latest_import.copied_messages == 440
+    assert snapshot.latest_import.reconciled_messages == 3
+    assert snapshot.latest_import.reindexed_messages == 438
+    assert snapshot.latest_import.missing_archive_messages == 2
     assert len(snapshot.recent_audits) == 1
     assert snapshot.recent_audits[0].target_key == "search_result_limit"
     assert {movie.status for movie in snapshot.problem_movies} == {
