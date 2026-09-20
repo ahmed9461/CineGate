@@ -102,6 +102,21 @@ class OwnerAdminService:
             value = await SettingsRepository(session).get(key)
         return definition.default if value is None else value
 
+    async def get_settings_effective(
+        self,
+        keys: tuple[str, ...],
+    ) -> dict[str, Any]:
+        definitions = {
+            key: get_setting_definition(key)
+            for key in keys
+        }
+        async with self._database.session() as session:
+            stored = await SettingsRepository(session).get_many(keys)
+        return {
+            key: stored.get(key, definition.default)
+            for key, definition in definitions.items()
+        }
+
     async def get_template_effective(self, key: str) -> StoredTemplate:
         definition = get_template_definition(key)
         async with self._database.session() as session:
