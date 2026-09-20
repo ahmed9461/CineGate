@@ -225,6 +225,15 @@ SETTINGS: dict[str, SettingDefinition] = {
             "قيمة بين 0.15 و 0.95.",
         ),
         SettingDefinition(
+            "source_channel_id",
+            "معرّف القناة الأصلية",
+            "archive",
+            None,
+            _parse_archive_channel_id,
+            _format_plain,
+            "أرسل Channel ID الرقمي السالب للقناة الأصلية.",
+        ),
+        SettingDefinition(
             "archive_channel_id",
             "معرّف قناة الأرشيف",
             "archive",
