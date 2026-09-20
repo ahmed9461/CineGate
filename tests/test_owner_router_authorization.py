@@ -4,9 +4,9 @@ from types import SimpleNamespace
 
 import pytest
 
+from cinegate.admin.service import EditSessionView
 from cinegate.bot.admin_callbacks import AdminPageCallback
 from cinegate.bot.owner_router import ActiveOwnerEditFilter, build_owner_router
-from cinegate.admin.service import EditSessionView
 
 OWNER_ID = 123456789
 OTHER_ID = 987654321
