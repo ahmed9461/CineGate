@@ -115,7 +115,7 @@ def admin_status_text(
     )
     notifications_ready = settings.get("owner_chat_id") is not None
 
-    return (
+    text = (
         "📊 حالة CineGate\n\n"
         f"{_mark(archive_ready)} الأرشيف\n"
         f"{_mark(ads_ready)} الإعلانات و Mini App\n"
@@ -127,6 +127,19 @@ def admin_status_text(
         f"⚠️ حذف فشل نهائيًا: {diagnostics.delete_failed}\n"
         f"🧾 تغييرات إدارية مسجلة: {diagnostics.audit_entries}"
     )
+
+    if diagnostics.latest_import is not None:
+        latest = diagnostics.latest_import
+        text += (
+            "\n\n📦 آخر استيراد تاريخي"
+            f"\nالحالة: {latest.status}"
+            f"\nتم النقل: {latest.copied_messages}"
+            f"\nتم الاسترجاع: {latest.reconciled_messages}"
+            f"\nتمت الفهرسة: {latest.reindexed_messages}"
+            f"\nمفقود: {latest.missing_archive_messages}"
+        )
+
+    return text
 
 
 def diagnostics_text(snapshot: DiagnosticsSnapshot) -> str:
@@ -163,6 +176,27 @@ def diagnostics_text(snapshot: DiagnosticsSnapshot) -> str:
                 f"— msg {delivery.telegram_message_id or '-'}\n"
                 f"  {error}"
             )
+
+    if snapshot.latest_import is not None:
+        latest = snapshot.latest_import
+        lines.extend(
+            [
+                "",
+                "آخر استيراد تاريخي:",
+                f"• Job {latest.job_id}",
+                f"• source {latest.source_channel_id}",
+                f"• archive {latest.archive_channel_id}",
+                f"• status {latest.status}",
+                (
+                    f"• copied {latest.copied_messages} / "
+                    f"reconciled {latest.reconciled_messages} / "
+                    f"reindexed {latest.reindexed_messages} / "
+                    f"missing {latest.missing_archive_messages}"
+                ),
+            ]
+        )
+        if latest.last_error:
+            lines.append(f"• آخر خطأ: {_excerpt(latest.last_error, 200)}")
 
     if snapshot.recent_audits:
         lines.extend(["", "آخر تغييرات المالك:"])
