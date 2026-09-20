@@ -202,3 +202,34 @@ async def test_expired_session_allows_new_reward(reward_setup) -> None:
             select(RewardSession.status).where(RewardSession.id == old.id)
         )
     assert status == "expired"
+
+
+
+@pytest.mark.asyncio
+async def test_earned_reward_survives_original_session_expiry(reward_setup) -> None:
+    database, movie_id = reward_setup
+    service = RewardSessionService(database)
+    reward, _ = await service.get_or_create(
+        telegram_user_id=USER_ID,
+        movie_id=movie_id,
+        quality="720p",
+    )
+
+    await service.mark_client_completed(
+        session_id=reward.id,
+        telegram_user_id=USER_ID,
+    )
+    rewarded = await service.mark_provider_confirmed(telegram_user_id=USER_ID)
+    assert rewarded is not None
+    assert rewarded.status == "rewarded"
+
+    async with database.session() as session, session.begin():
+        await session.execute(
+            update(RewardSession)
+            .where(RewardSession.id == reward.id)
+            .values(expires_at=datetime.now(UTC) - timedelta(minutes=5))
+        )
+
+    current = await service.get(reward.id)
+
+    assert current.status == "rewarded"
