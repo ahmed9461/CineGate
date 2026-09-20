@@ -8,7 +8,6 @@ from sqlalchemy.dialects.postgresql import insert
 
 from cinegate.admin.registry import (
     AdminValidationError,
-    SettingDefinition,
     TemplateDefinition,
     get_setting_definition,
     get_template_definition,
