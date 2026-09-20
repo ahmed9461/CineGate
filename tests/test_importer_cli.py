@@ -12,7 +12,12 @@ from cinegate.db.models import (
     ArchiveImportMessageMap,
 )
 from cinegate.db.session import Database
-from cinegate.importer.cli import _resolve_pair, async_main, build_parser
+from cinegate.importer.cli import (
+    _ensure_runtime_archive_matches,
+    _resolve_pair,
+    async_main,
+    build_parser,
+)
 from cinegate.importer.errors import HistoricalImportError
 from cinegate.repositories.import_jobs import ArchiveImportRepository
 from cinegate.repositories.settings import SettingsRepository
@@ -110,4 +115,22 @@ async def test_source_archive_equality_is_rejected(database: Database) -> None:
             database=database,
             source_arg=SOURCE_ID,
             archive_arg=SOURCE_ID,
+        )
+
+
+
+@pytest.mark.asyncio
+async def test_run_preflight_rejects_archive_target_mismatch(
+    database: Database,
+) -> None:
+    async with database.session() as session, session.begin():
+        await SettingsRepository(session).set(
+            "archive_channel_id",
+            ARCHIVE_ID,
+        )
+
+    with pytest.raises(HistoricalImportError, match="runtime setting"):
+        await _ensure_runtime_archive_matches(
+            database,
+            ARCHIVE_ID - 1,
         )
