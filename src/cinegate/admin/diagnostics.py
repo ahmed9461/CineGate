@@ -4,7 +4,13 @@ from dataclasses import dataclass
 
 from sqlalchemy import func, select
 
-from cinegate.db.models import Delivery, Movie, MovieQuality, RewardSession
+from cinegate.db.models import (
+    AdminAuditLog,
+    Delivery,
+    Movie,
+    MovieQuality,
+    RewardSession,
+)
 from cinegate.db.session import Database
 
 _ACTIVE_REWARD_STATUSES = (
@@ -43,6 +49,7 @@ class DiagnosticsSnapshot:
     rewarded_waiting_delivery: int
     sent_waiting_delete: int
     delete_failed: int
+    audit_entries: int
     problem_movies: tuple[ProblemMovie, ...]
     failed_deletions: tuple[FailedDeletion, ...]
 
@@ -102,6 +109,10 @@ class AdminDiagnosticsService:
                 )
             ).all()
 
+            audit_count = int(
+                await session.scalar(select(func.count(AdminAuditLog.id))) or 0
+            )
+
             failures = (
                 await session.execute(
                     select(
@@ -126,6 +137,7 @@ class AdminDiagnosticsService:
             rewarded_waiting_delivery=int(reward_counts[1] or 0),
             sent_waiting_delete=int(delivery_counts[0] or 0),
             delete_failed=int(delivery_counts[1] or 0),
+            audit_entries=audit_count,
             problem_movies=tuple(
                 ProblemMovie(
                     movie_id=row.id,
