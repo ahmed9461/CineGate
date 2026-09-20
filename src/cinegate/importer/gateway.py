@@ -35,6 +35,7 @@ class HistoricalTelegramGateway:
         session_path.parent.mkdir(parents=True, exist_ok=True)
         self._session_path = session_path
         self._flood_wait_limit = flood_wait_limit
+        self._dialogs_loaded = False
         self._client = TelegramClient(
             str(session_path),
             settings.telegram_api_id,
@@ -67,15 +68,21 @@ class HistoricalTelegramGateway:
         await self._client.disconnect()
 
     async def resolve_channel(self, channel_id: int) -> Any:
-        # Populate entity cache so marked private channel IDs can resolve
-        # reliably from an authenticated user's dialogs.
-        await self._client.get_dialogs()
+        await self._ensure_entity_cache()
         try:
             return await self._client.get_entity(channel_id)
         except (ValueError, errors.RPCError) as exc:
             raise ImportChannelAccessError(
                 f"could not resolve Telegram channel {channel_id}"
             ) from exc
+
+    async def _ensure_entity_cache(self) -> None:
+        if getattr(self, "_dialogs_loaded", False):
+            return
+        # Populate entity cache once so marked private channel IDs can resolve
+        # reliably without repeatedly fetching the full dialog list.
+        await self._client.get_dialogs()
+        self._dialogs_loaded = True
 
     async def resolve_channels(
         self,
