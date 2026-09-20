@@ -6,7 +6,11 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 import pytest_asyncio
-from aiogram.exceptions import TelegramAPIError, TelegramBadRequest
+from aiogram.exceptions import (
+    TelegramAPIError,
+    TelegramBadRequest,
+    TelegramForbiddenError,
+)
 from sqlalchemy import delete
 
 from cinegate.db.models import (
@@ -42,6 +46,13 @@ class FakeTelegramBadRequest(TelegramBadRequest):
         self.method = None
 
 
+class FakeTelegramForbidden(TelegramForbiddenError):
+    def __init__(self, message: str = "bot was blocked by the user") -> None:
+        Exception.__init__(self, message)
+        self.message = message
+        self.method = None
+
+
 class FakeBot:
     def __init__(self) -> None:
         self.deleted: list[tuple[int, int]] = []
@@ -51,6 +62,10 @@ class FakeBot:
         self.deleted.append((chat_id, message_id))
         if self.mode == "missing":
             raise FakeTelegramBadRequest()
+        if self.mode == "bad_request":
+            raise FakeTelegramBadRequest("message can't be deleted")
+        if self.mode == "forbidden":
+            raise FakeTelegramForbidden()
         if self.mode == "transient":
             raise FakeTelegramFailure()
         return True
@@ -299,3 +314,72 @@ async def test_claim_batch_is_bounded(setup) -> None:
 
     assert len(due) == 3
     assert all(isinstance(item, DueDeletion) for item in due)
+
+
+
+@pytest.mark.asyncio
+async def test_permanent_bad_request_is_recorded_not_falsely_deleted(setup) -> None:
+    database, bot, service, delivery_id = setup
+    bot.mode = "bad_request"
+    worker = DeliveryDeletionWorker(
+        delivery_service=service,
+        bot=bot,  # type: ignore[arg-type]
+    )
+    due = await service.claim_due_deletions(limit=10)
+
+    await worker._delete_one(due[0])
+
+    async with database.session() as session:
+        row = await session.get(Delivery, delivery_id)
+
+    assert row is not None
+    assert row.status == "delete_failed"
+    assert row.deleted_at is None
+    assert row.next_attempt_at is None
+    assert row.last_error is not None
+
+
+@pytest.mark.asyncio
+async def test_forbidden_delete_is_recorded_as_permanent_failure(setup) -> None:
+    database, bot, service, delivery_id = setup
+    bot.mode = "forbidden"
+    worker = DeliveryDeletionWorker(
+        delivery_service=service,
+        bot=bot,  # type: ignore[arg-type]
+    )
+    due = await service.claim_due_deletions(limit=10)
+
+    await worker._delete_one(due[0])
+
+    async with database.session() as session:
+        row = await session.get(Delivery, delivery_id)
+
+    assert row is not None
+    assert row.status == "delete_failed"
+    assert row.next_attempt_at is None
+
+
+@pytest.mark.asyncio
+async def test_message_older_than_48h_is_not_claimed_for_impossible_delete(
+    setup,
+) -> None:
+    database, bot, service, delivery_id = setup
+
+    async with database.session() as session, session.begin():
+        row = await session.get(Delivery, delivery_id)
+        assert row is not None
+        row.sent_at = datetime.now(UTC) - timedelta(hours=49)
+        row.next_attempt_at = datetime.now(UTC) - timedelta(seconds=1)
+
+    due = await service.claim_due_deletions(limit=10)
+
+    assert due == ()
+    assert bot.deleted == []
+
+    async with database.session() as session:
+        row = await session.get(Delivery, delivery_id)
+
+    assert row is not None
+    assert row.status == "delete_failed"
+    assert row.deleted_at is None
+    assert "48 hours" in (row.last_error or "")
