@@ -35,7 +35,7 @@ This roadmap is directional. Every phase requires its own detailed plan file bef
 - [x] Configuration/secret model
 - [x] Database migrations
 - [ ] Logging and error model
-- [ ] Owner bootstrap/access control
+- [x] Owner bootstrap/access control
 - [x] Basic health/diagnostics
 
 ## Phase 3 — Archive indexing & initial import
@@ -96,30 +96,32 @@ This roadmap is directional. Every phase requires its own detailed plan file bef
 - [x] Restart reconciliation
 - [x] Retry failures
 - [x] Ensure poster remains untouched
-- [ ] Owner-configurable deletion duration
+- [x] Owner-configurable deletion duration
 
 **Reward/delivery implementation:** `plans/0006-reward-delivery-and-deletion.md`
 
 ## Phase 8 — Owner/admin control center
 
-- [ ] Message template editor
-- [ ] Preview formatting
-- [ ] Runtime settings editor
-- [ ] Deletion timing settings
-- [ ] Search settings
-- [ ] Archive/index notification settings
-- [ ] Ad settings (non-secret)
+- [x] Message template editor
+- [x] Preview formatting
+- [x] Runtime settings editor
+- [x] Deletion timing settings
+- [x] Search settings
+- [x] Archive/index notification settings
+- [x] Ad settings (non-secret)
 - [ ] Button/presentation settings
-- [ ] Audit trail / safe validation
-- [ ] Defaults/reset where appropriate
+- [x] Audit trail / safe validation
+- [x] Defaults/reset where appropriate
+
+**Owner control implementation:** `plans/0007-owner-control-center.md`
 
 ## Phase 9 — Telegram rich presentation
 
 - [ ] Confirm selected library/Bot API support
-- [ ] Preserve entities/formatting
+- [x] Preserve entities/formatting
 - [ ] RTL behavior
 - [ ] Rich messages where valuable
-- [ ] Modern button styles where supported
+- [x] Modern button styles where supported
 - [ ] Fallback behavior for unsupported clients/features
 
 ## Phase 10 — Hardening & launch
