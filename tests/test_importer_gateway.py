@@ -4,6 +4,7 @@ import pytest
 
 from cinegate.importer.errors import (
     HistoricalImportError,
+    ImportChannelAccessError,
     ImportFloodWaitTooLong,
     UserBotUnauthorized,
 )
@@ -180,3 +181,34 @@ async def test_private_channel_entity_cache_is_loaded_once() -> None:
     assert second.id == -100222
     assert gateway._client.dialog_calls == 1
     assert gateway._client.entity_calls == [-100111, -100222]
+
+
+
+class ProtectedArchiveClient:
+    def __init__(self) -> None:
+        self.dialog_calls = 0
+
+    async def get_dialogs(self):
+        self.dialog_calls += 1
+        return []
+
+    async def get_entity(self, channel_id):
+        return SimpleNamespace(
+            id=channel_id,
+            noforwards=(channel_id == -100222),
+        )
+
+
+@pytest.mark.asyncio
+async def test_protected_archive_channel_is_rejected_before_import() -> None:
+    gateway = object.__new__(HistoricalTelegramGateway)
+    gateway._dialogs_loaded = False
+    gateway._client = ProtectedArchiveClient()
+
+    with pytest.raises(ImportChannelAccessError, match="Archive Channel"):
+        await gateway.resolve_channels(
+            source_channel_id=-100111,
+            archive_channel_id=-100222,
+        )
+
+    assert gateway._client.dialog_calls == 1
