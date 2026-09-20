@@ -85,9 +85,9 @@ def render_template(
     pieces.append(body[cursor:])
     rendered = "".join(pieces)
 
-    if len(rendered) > max_length:
+    if _utf16_len(rendered) > max_length:
         raise TemplateRenderError(
-            f"rendered template exceeds {max_length} characters"
+            f"rendered template exceeds {max_length} UTF-16 units"
         )
 
     entity_dicts = _remap_entities(
@@ -111,9 +111,9 @@ def validate_template_source(
 ) -> None:
     if not body:
         raise TemplateRenderError("template body cannot be empty")
-    if len(body) > max_length:
+    if _utf16_len(body) > max_length:
         raise TemplateRenderError(
-            f"template source exceeds {max_length} characters"
+            f"template source exceeds {max_length} UTF-16 units"
         )
 
     variables = tuple(_VARIABLE_RE.finditer(body))
