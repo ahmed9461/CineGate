@@ -4,7 +4,7 @@ CineGate is a Telegram movie-search and rewarded-delivery project backed by a pr
 
 ## Current phase
 
-The application foundation, archive parser, secure Telegram webhook, real-time archive indexer, search flow, rewarded delivery, durable deletion, and owner control center are implemented.
+The application foundation, archive parser, secure Telegram webhook, real-time archive indexer, search flow, rewarded delivery, durable deletion, owner control center, and historical importer are implemented.
 
 Current stack:
 
@@ -40,10 +40,14 @@ The project intentionally does **not** include Redis, Celery, Kafka, or a micros
 - formatted Telegram template editing and preview/reset
 - durable admin edit state + audit history
 - owner status/diagnostics
+- one-time Telethon historical importer CLI
+- durable source→Archive import mapping/checkpoints
+- crash reconciliation and resumable historical reindex
+- owner/CLI historical import progress and verification
 - local PostgreSQL Compose service
 - CI for lint, tests, PostgreSQL migration round-trip, and Python compile checks
 
-Historical one-time UserBot import, advanced presentation work, and launch hardening are the remaining major phases.
+Launch hardening, deployment, real-time edit/delete reconciliation, controlled live validation, and advanced presentation work are the remaining major phases.
 
 > **Webhook ordering:** Until a durable global update sequencer is added, production webhook registration must use `max_connections=1`.
 
@@ -77,6 +81,13 @@ Install the project:
 
 ```bash
 python -m pip install -e ".[dev]"
+```
+
+For the one-time historical UserBot importer:
+
+```bash
+python -m pip install -e ".[import]"
+python -m cinegate.importer --help
 ```
 
 Apply migrations:
