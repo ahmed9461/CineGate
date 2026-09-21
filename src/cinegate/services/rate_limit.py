@@ -89,6 +89,7 @@ class AbuseProtection:
     search: SlidingWindowLimiter
     callback: SlidingWindowLimiter
     reward_claim: SlidingWindowLimiter
+    notice: SlidingWindowLimiter | None = None
 
     @classmethod
     def defaults(cls) -> AbuseProtection:
@@ -107,5 +108,10 @@ class AbuseProtection:
                 limit=20,
                 window_seconds=30,
                 max_keys=20_000,
+            ),
+            notice=SlidingWindowLimiter(
+                limit=1,
+                window_seconds=5,
+                max_keys=10_000,
             ),
         )
