@@ -121,7 +121,7 @@ class HistoricalImportService:
 
                 for mapping, message in zip(mappings, messages, strict=True):
                     total += 1
-                    if message is None:
+                    if not is_importable_message(message):
                         missing += 1
                     else:
                         recovered_source_id = forwarded_source_message_id(
@@ -265,7 +265,7 @@ class HistoricalImportService:
                         )
 
                     for mapping, message in zip(mappings, messages, strict=True):
-                        if message is None:
+                        if not is_importable_message(message):
                             await self._mark_reindexed(
                                 job_id=job.id,
                                 source_message_id=mapping.source_message_id,
