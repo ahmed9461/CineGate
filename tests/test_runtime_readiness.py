@@ -12,23 +12,27 @@ from cinegate.services.rate_limit import AbuseProtection
 
 
 class FakeSession:
-    def __init__(self, *, fail: bool = False) -> None:
+    def __init__(self, *, fail: bool = False, delay: float = 0.0) -> None:
         self.fail = fail
+        self.delay = delay
 
     async def execute(self, statement):
+        if self.delay:
+            await asyncio.sleep(self.delay)
         if self.fail:
             raise SQLAlchemyError("database unavailable")
         return None
 
 
 class FakeDatabase:
-    def __init__(self, *, fail: bool = False) -> None:
+    def __init__(self, *, fail: bool = False, delay: float = 0.0) -> None:
         self.fail = fail
+        self.delay = delay
         self.disposed = False
 
     @asynccontextmanager
     async def session(self):
-        yield FakeSession(fail=self.fail)
+        yield FakeSession(fail=self.fail, delay=self.delay)
 
     async def dispose(self) -> None:
         self.disposed = True
@@ -87,6 +91,18 @@ async def test_runtime_ready_rejects_database_failure() -> None:
         db_fail=True,
         worker=SimpleNamespace(done=lambda: False),
     )
+
+    ready, reason = await runtime.check_ready()
+
+    assert not ready
+    assert reason == "database unavailable"
+
+
+@pytest.mark.asyncio
+async def test_runtime_ready_bounds_a_hung_database_check() -> None:
+    runtime = runtime_for(worker=SimpleNamespace(done=lambda: False))
+    runtime.database = FakeDatabase(delay=1)  # type: ignore[assignment]
+    runtime.readiness_timeout_seconds = 0.01
 
     ready, reason = await runtime.check_ready()
 

@@ -53,25 +53,32 @@ class ArchiveIndexService:
                     message=message,
                 )
 
-            existing_quality = await session.scalar(
-                select(MovieQuality)
+            # Keep the same movie -> quality lock order used by live ingest.
+            # Reversing it here can deadlock an edit against a rapid new post.
+            quality_movie = await session.scalar(
+                select(Movie)
+                .join(MovieQuality, MovieQuality.movie_id == Movie.id)
                 .where(
                     MovieQuality.archive_channel_id == channel_id,
                     MovieQuality.archive_message_id == message.message_id,
                 )
-                .with_for_update()
+                .with_for_update(of=Movie)
             )
-            if existing_quality is not None:
-                movie = await session.scalar(
-                    select(Movie)
-                    .where(Movie.id == existing_quality.movie_id)
+            if quality_movie is not None:
+                existing_quality = await session.scalar(
+                    select(MovieQuality)
+                    .where(
+                        MovieQuality.movie_id == quality_movie.id,
+                        MovieQuality.archive_channel_id == channel_id,
+                        MovieQuality.archive_message_id == message.message_id,
+                    )
                     .with_for_update()
                 )
-                if movie is None:
+                if existing_quality is None:
                     return ArchiveIndexResult(IndexAction.IGNORED)
                 return await self._reconcile_quality_edit(
                     session=session,
-                    movie=movie,
+                    movie=quality_movie,
                     quality_row=existing_quality,
                     message=message,
                 )
@@ -483,6 +490,10 @@ class ArchiveIndexService:
         session: AsyncSession,
         movie: Movie,
     ) -> str:
+        # Database sessions intentionally disable autoflush. Persist pending
+        # poster/quality edits before the aggregate safety check so it cannot
+        # make a state transition from stale parser confidence values.
+        await session.flush()
         total, invalid = (
             await session.execute(
                 select(

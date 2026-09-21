@@ -35,6 +35,7 @@ class AppRuntime:
     delivery: DeliveryService
     deletion_worker: DeliveryDeletionWorker
     abuse: AbuseProtection
+    readiness_timeout_seconds: float = 3.0
     stop_event: asyncio.Event = field(default_factory=asyncio.Event)
     worker_task: asyncio.Task[None] | None = None
 
@@ -52,9 +53,10 @@ class AppRuntime:
             return False, "deletion worker stopped"
 
         try:
-            async with self.database.session() as session:
-                await session.execute(text("SELECT 1"))
-        except SQLAlchemyError:
+            async with asyncio.timeout(self.readiness_timeout_seconds):
+                async with self.database.session() as session:
+                    await session.execute(text("SELECT 1"))
+        except (SQLAlchemyError, TimeoutError):
             return False, "database unavailable"
 
         return True, "ready"

@@ -587,6 +587,66 @@ async def test_edited_quality_updates_same_archive_message_row(
 
 
 @pytest.mark.asyncio
+async def test_quality_edit_and_new_quality_share_safe_lock_order(
+    database: Database,
+) -> None:
+    await set_setting(database, "archive_channel_id", ARCHIVE_CHANNEL_ID)
+    indexer = ArchiveIndexService(database)
+
+    await indexer.ingest(
+        channel_id=ARCHIVE_CHANNEL_ID,
+        message=modern_poster(100, title="Concurrent Edit", year=2025),
+    )
+    await indexer.ingest(
+        channel_id=ARCHIVE_CHANNEL_ID,
+        message=quality(
+            101,
+            title="Concurrent Edit",
+            year=2025,
+            resolution="720p",
+        ),
+    )
+
+    edit_result, ingest_result = await asyncio.wait_for(
+        asyncio.gather(
+            indexer.reconcile_edit(
+                channel_id=ARCHIVE_CHANNEL_ID,
+                message=quality(
+                    101,
+                    title="Concurrent Edit Corrected",
+                    year=2025,
+                    resolution="720p",
+                ),
+            ),
+            indexer.ingest(
+                channel_id=ARCHIVE_CHANNEL_ID,
+                message=quality(
+                    102,
+                    title="Concurrent Edit",
+                    year=2025,
+                    resolution="1080p",
+                ),
+            ),
+        ),
+        timeout=5,
+    )
+
+    async with database.session() as session:
+        movie = await session.scalar(select(Movie))
+        qualities = (
+            await session.execute(
+                select(MovieQuality).order_by(MovieQuality.archive_message_id)
+            )
+        ).scalars().all()
+
+    assert edit_result.action is IndexAction.QUALITY_UPSERTED
+    assert ingest_result.action is IndexAction.QUALITY_UPSERTED
+    assert movie is not None
+    assert movie.status == "indexed"
+    assert [row.quality for row in qualities] == ["720p", "1080p"]
+
+
+@pytest.mark.asyncio
 async def test_invalid_quality_edit_marks_movie_ambiguous_and_hides_from_search(
     database: Database,
 ) -> None:
