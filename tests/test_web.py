@@ -29,9 +29,14 @@ class FakeRuntime:
         self.dispatcher = FakeDispatcher()
         self.started = False
         self.closed = False
+        self.ready = True
+        self.ready_reason = "ready"
 
     async def start(self) -> None:
         self.started = True
+
+    async def check_ready(self) -> tuple[bool, str]:
+        return self.ready, self.ready_reason
 
     async def close(self) -> None:
         self.closed = True
@@ -141,3 +146,29 @@ def test_webhook_internal_failure_is_not_falsely_acknowledged() -> None:
 
     assert response.status_code == 500
     assert len(runtime.dispatcher.updates) == 1
+
+
+
+def test_readiness_endpoint_returns_200_when_runtime_is_ready() -> None:
+    runtime = FakeRuntime()
+
+    with client_for(runtime) as client:
+        response = client.get("/readyz")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ready", "reason": "ready"}
+
+
+def test_readiness_endpoint_returns_503_when_runtime_is_not_ready() -> None:
+    runtime = FakeRuntime()
+    runtime.ready = False
+    runtime.ready_reason = "database unavailable"
+
+    with client_for(runtime) as client:
+        response = client.get("/readyz")
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "status": "not_ready",
+        "reason": "database unavailable",
+    }
