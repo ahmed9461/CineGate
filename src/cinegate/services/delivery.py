@@ -115,6 +115,18 @@ class DeliveryService:
             movie = await session.get(Movie, reward.movie_id)
             if quality is None or movie is None:
                 raise RewardNotReady("rewarded movie quality no longer exists")
+            if movie.status != "indexed":
+                raise RewardNotReady(
+                    "rewarded movie is not currently safe for delivery"
+                )
+            if quality.parser_confidence <= 0:
+                raise RewardNotReady(
+                    "rewarded quality is not currently safe for delivery"
+                )
+            if reward.quality != quality.quality:
+                raise RewardNotReady(
+                    "rewarded quality binding no longer matches Archive metadata"
+                )
 
             settings = await SettingsRepository(session).get_many(
                 ("movie_delete_seconds",)
