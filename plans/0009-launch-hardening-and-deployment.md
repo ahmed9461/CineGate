@@ -1,6 +1,6 @@
 # Plan 0009 — Launch hardening and deployment
 
-**Status:** In progress  
+**Status:** Completed
 **Created:** 2026-09-21  
 **Last updated:** 2026-09-21
 
@@ -341,43 +341,43 @@ Review:
 
 ## Acceptance criteria
 
-- [ ] public-user abuse limits implemented and tested
-- [ ] reward claim HTTP rate limit returns 429 safely
-- [ ] structured logging redacts sensitive routes/data
-- [ ] liveness/readiness implemented
-- [ ] webhook set/status/delete tooling implemented
-- [ ] webhook operations enforce max_connections=1
-- [ ] real-time edited_channel_post reconciliation implemented
-- [ ] Archive deletion limitation documented honestly
-- [ ] read-only Archive integrity audit implemented
-- [ ] backup/restore runbook added
-- [ ] deployment/runbook added
-- [ ] final launch checklist added
-- [ ] full CI passes
-- [ ] two reviews documented
-- [ ] project memory/status/roadmap/progress updated
+- [x] public-user abuse limits implemented and tested
+- [x] reward claim HTTP rate limit returns 429 safely
+- [x] structured logging redacts sensitive routes/data
+- [x] liveness/readiness implemented
+- [x] webhook set/status/delete tooling implemented
+- [x] webhook operations enforce max_connections=1
+- [x] real-time edited_channel_post reconciliation implemented
+- [x] Archive deletion limitation documented honestly
+- [x] read-only Archive integrity audit implemented
+- [x] backup/restore runbook added
+- [x] deployment/runbook added
+- [x] final launch checklist added
+- [x] full CI passes
+- [x] two reviews documented
+- [x] project memory/status/roadmap/progress updated
 
 ## Implementation steps
 
 - [x] 1. Create this plan before code.
-- [ ] 2. Implement bounded public-user rate limiter.
-- [ ] 3. Wire Telegram message/callback limits.
-- [ ] 4. Wire HTTP reward claim limit.
-- [ ] 5. Add structured/redacted logging.
-- [ ] 6. Add readiness endpoint and runtime health state.
-- [ ] 7. Add webhook operations CLI.
-- [ ] 8. Add edited_channel_post reconciliation.
-- [ ] 9. Add Archive integrity audit command.
-- [ ] 10. Add backup/restore runbook.
-- [ ] 11. Add deployment runbook/service template.
-- [ ] 12. Add launch checklist.
-- [ ] 13. Add hardening tests.
-- [ ] 14. Run full CI.
-- [ ] 15. Correctness/security review.
-- [ ] 16. Performance/complexity review.
-- [ ] 17. Final CI.
-- [ ] 18. Update repository memory/docs.
-- [ ] 19. Mark complete.
+- [x] 2. Implement bounded public-user rate limiter.
+- [x] 3. Wire Telegram message/callback limits.
+- [x] 4. Wire HTTP reward claim limit.
+- [x] 5. Add structured/redacted logging.
+- [x] 6. Add readiness endpoint and runtime health state.
+- [x] 7. Add webhook operations CLI.
+- [x] 8. Add edited_channel_post reconciliation.
+- [x] 9. Add Archive integrity audit command.
+- [x] 10. Add backup/restore runbook.
+- [x] 11. Add deployment runbook/service template.
+- [x] 12. Add launch checklist.
+- [x] 13. Add hardening tests.
+- [x] 14. Run full CI.
+- [x] 15. Correctness/security review.
+- [x] 16. Performance/complexity review.
+- [x] 17. Final CI.
+- [x] 18. Update repository memory/docs.
+- [x] 19. Mark complete.
 
 ## Progress notes
 
@@ -387,7 +387,60 @@ Review:
 - Bot API 10.3 Update capabilities reviewed.
 - `edited_channel_post` is available through Bot API.
 - channel-message deletion updates are not exposed through Bot API; deletion audit will therefore be operational/read-only rather than falsely described as real-time.
+- Added bounded search/callback/reward-claim rate limiting; the limiter is deliberately not a correctness primitive.
+- Added structured JSON request/application logs, secret-path redaction, `/readyz`, worker/database readiness, and a bounded database-readiness timeout.
+- Added safe webhook set/status/delete operations with explicit allowed updates and `max_connections=1`.
+- Added idempotent Archive edit reconciliation and a read-only, batched, high-watermark-bounded Archive reference audit.
+- Added executable atomic backup/restore scripts, provider-neutral deployment guidance, a hardened single-process systemd template, and the launch checklist.
+- The first continuation CI exposed a missing restore transaction flag; production code was corrected with `--single-transaction` instead of weakening the test.
+- A later CI exposed stale SQLAlchemy aggregate state during quality repair; production now flushes pending edits before status recomputation.
+
+### Correctness/security review
+
+Found and fixed:
+
+- invalid or conflicting Archive quality edits can no longer be reactivated by a stale duplicate or a different valid quality update
+- Archive edit/ingest locking now consistently acquires movie before quality, avoiding the inverse-lock deadlock window
+- rewarded delivery remains bound to the exact quality row and refuses changed/unsafe Archive metadata
+- AdsGram callback paths remain redacted even for trailing-slash/extra-path requests
+- unexpected operations CLI errors expose only the exception class, not secret-bearing payloads
+- runtime, Bot, database, and operational resources are released on failure paths
+- restore validates the archive and runs atomically; backup publication is atomic and removes failed partial files
+
+### Performance/complexity review
+
+Confirmed/fixed:
+
+- limiter key/deque growth is bounded and repeated blocked-search notices are throttled
+- rate limiting remains single-process protection only; PostgreSQL state machines retain correctness
+- readiness uses one `SELECT 1`, has a bounded timeout, and does not call Telegram/AdsGram
+- Archive edits reparse only the affected message/group
+- integrity audit performs bounded Telegram batches against start high-watermarks, so concurrent catalog growth cannot make a run unbounded
+- Telegram/network calls remain outside long database transactions
+- Telethon remains optional and lazy-loaded only for the audit/import tools
+- no Redis, broker, additional daemon, or new dependency was added
+
+### Final verification
+
+GitHub Actions run `35613474434` on commit `09e9d3abce58fb9b833b01b408aa0f6e81d6d4df`:
+
+- Ruff: passed
+- pytest: **285 passed**
+- PostgreSQL migrations `0001 → 0010`: passed
+- full downgrade to base and restore to head: passed
+- compileall: passed
+- shell-script syntax checks: passed
 
 ## Completion summary
 
-Pending.
+Plan 0009 is complete.
+
+Remaining work is external launch execution rather than missing implementation:
+
+- choose/configure the production host and trusted HTTPS edge
+- provide production Telegram/AdsGram values
+- perform a restore drill against a fresh non-production database
+- execute the controlled live Telegram/AdsGram checklist
+- configure external monitoring/alert delivery
+
+The exact next step is to deploy the verified `main` revision in the chosen production environment and work through `docs/LAUNCH_CHECKLIST.md`. Keep webhook concurrency at `max_connections=1`.

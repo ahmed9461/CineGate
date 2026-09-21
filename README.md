@@ -4,7 +4,7 @@ CineGate is a Telegram movie-search and rewarded-delivery project backed by a pr
 
 ## Current phase
 
-The application foundation, archive parser, secure Telegram webhook, real-time archive indexer, search flow, rewarded delivery, durable deletion, owner control center, and historical importer are implemented.
+Plans 0003–0009 are implemented and CI-verified: application foundation, archive indexing/search, rewarded delivery, durable deletion, owner control, historical import, and launch hardening.
 
 Current stack:
 
@@ -44,10 +44,18 @@ The project intentionally does **not** include Redis, Celery, Kafka, or a micros
 - durable source→Archive import mapping/checkpoints
 - crash reconciliation and resumable historical reindex
 - owner/CLI historical import progress and verification
+- bounded public search/callback/reward abuse protection
+- structured JSON logs with secret-path redaction
+- database/worker readiness with bounded timeout
+- webhook set/status/delete operations pinned to one connection
+- real-time Archive edit reconciliation
+- read-only batched Archive reference audit
+- atomic PostgreSQL backup/restore tooling
+- production deployment, systemd, and launch runbooks
 - local PostgreSQL Compose service
-- CI for lint, tests, PostgreSQL migration round-trip, and Python compile checks
+- CI for lint, 285 tests, PostgreSQL migration round-trip, Python compile, and shell checks
 
-Launch hardening, deployment, real-time edit/delete reconciliation, controlled live validation, and advanced presentation work are the remaining major phases.
+The remaining launch work is environment-specific: choose/configure the production host and HTTPS edge, provide real Telegram/AdsGram values, perform the fresh-database restore drill, run the controlled live checklist, and connect external alerts. Advanced presentation and any future global webhook sequencer remain separate work.
 
 > **Webhook ordering:** Until a durable global update sequencer is added, production webhook registration must use `max_connections=1`.
 
@@ -108,12 +116,29 @@ Health endpoint:
 GET /healthz
 ```
 
+Readiness endpoint:
+
+```text
+GET /readyz
+```
+
+Operational commands:
+
+```bash
+python -m cinegate.ops webhook set
+python -m cinegate.ops webhook status
+python -m cinegate.ops archive verify
+```
+
+See `docs/DEPLOYMENT.md`, `docs/BACKUP_RESTORE.md`, and `docs/LAUNCH_CHECKLIST.md` before production launch.
+
 Quality checks:
 
 ```bash
 ruff check .
 pytest -q
 python -m compileall -q src tests
+bash -n scripts/*.sh
 ```
 
 ## Mandatory project workflow

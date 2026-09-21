@@ -402,10 +402,62 @@ Normal new, unmapped Archive posts continue to notify the owner.
 
 ---
 
+## D-036 — In-process rate limiting is abuse protection only
+
+**Status:** Accepted
+**Date:** 2026-09-21
+
+Initial launch uses bounded in-process limits for public search messages, callbacks, and reward-claim HTTP requests.
+
+Limiter state may reset on restart and is not shared across processes. Authorization, reward, delivery, idempotency, and all other correctness decisions remain in PostgreSQL-backed state machines.
+
+**Reason:** One launch process needs lightweight abuse resistance, not distributed limiter infrastructure. A shared limiter can be planned if the deployment topology later expands.
+
+---
+
+## D-037 — Archive edits are real-time; deletion detection is operational
+
+**Status:** Accepted
+**Date:** 2026-09-21
+
+CineGate reconciles `edited_channel_post` updates through the Bot API webhook. Invalid or conflicting edits make the affected movie unsafe for search; stale duplicates and unrelated valid qualities cannot reactivate it.
+
+Telegram Bot API does not provide channel-message deletion updates. Missing indexed references are therefore detected with the explicit, read-only `archive verify` UserBot audit. The audit is batched and bounded by database high-watermarks captured at its start.
+
+**Reason:** This represents Telegram's observable events honestly without introducing a permanent UserBot daemon or pretending deletion is real-time.
+
+---
+
+## D-038 — Application logs are structured and secret-path safe
+
+**Status:** Accepted
+**Date:** 2026-09-21
+
+CineGate emits lightweight structured JSON application/request logs without request bodies or secret headers. The AdsGram bearer path is redacted, including trailing path variants.
+
+Raw Uvicorn access logging is disabled in the production service template, and the HTTPS edge must also avoid retaining the unredacted callback URL.
+
+**Reason:** The Reward URL contains an environment secret in its path, so generic raw access logs are not safe enough for production.
+
+---
+
+## D-039 — Initial production topology remains one application process
+
+**Status:** Accepted
+**Date:** 2026-09-21
+
+Initial production uses PostgreSQL plus one CineGate application process behind a trusted HTTPS edge. Readiness checks PostgreSQL and the deletion worker with a bounded timeout, but deliberately does not depend on Telegram or AdsGram availability.
+
+Webhook delivery remains `max_connections=1`. Backups are published atomically in PostgreSQL custom format, and restore tooling validates the archive and restores in one transaction.
+
+**Reason:** This is the smallest topology consistent with current ordering, recovery, secret-handling, and operational requirements.
+
+---
+
 # Pending decisions
 
 - Production AdsGram credentials/platform values
 - Hosting/deployment model
-- Telegram Bot API/client feature versions
-- Real-time archive edit/delete reconciliation behavior
+- External monitoring/alert destination
+- Telegram Bot API/client feature versions for future presentation work
 - Durable global webhook sequencer before raising `max_connections` above 1

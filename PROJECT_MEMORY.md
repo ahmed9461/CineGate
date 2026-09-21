@@ -615,34 +615,61 @@ See `plans/0008-historical-archive-import-and-reindex.md`.
 
 ---
 
-## 19. Launch hardening direction
+## 19. Implemented launch hardening and deployment operations
 
-The next phase is launch hardening and deployment.
+Plan 0009 completed the launch-hardening code and operational baseline.
 
-Primary targets:
+Implemented:
 
-- application-level abuse/rate limiting
-- structured/redacted logging
-- health/readiness
-- webhook registration/verification tooling
-- backup/restore
-- deployment/runbook
-- real-time Archive edit/delete reconciliation
-- production-safe access-log handling
-- monitoring/operational diagnostics
-- controlled live Telegram validation
-- rapid-click/load/restart validation
+- bounded in-process search, callback, and reward-claim abuse protection
+- PostgreSQL-backed correctness independent of rate-limiter memory/restarts
+- structured JSON application/request logging
+- AdsGram secret callback-path redaction, including trailing path variants
+- `/healthz` liveness and bounded `/readyz` database/worker readiness
+- webhook set/status/delete CLI with explicit allowed updates and `max_connections=1`
+- real-time `edited_channel_post` reconciliation
+- safe movie status recomputation after poster/quality edits
+- consistent movie→quality lock order for concurrent ingest/edit paths
+- read-only, batched Archive integrity audit bounded by start high-watermarks
+- atomic custom-format PostgreSQL backup publication
+- validated, single-transaction restore tooling
+- provider-neutral deployment/backup runbooks
+- hardened single-process systemd example
+- controlled production launch checklist
+
+Operational constraints:
+
+- Telegram Bot API exposes Archive edits but not channel-message deletions; deletion detection is therefore an explicit read-only audit operation.
+- Launch remains one application process and webhook `max_connections=1` until durable global sequencing has its own plan and tests.
+- Reverse-proxy/Uvicorn raw access logs must not retain the AdsGram secret callback path.
+- Readiness depends on PostgreSQL and the deletion worker, not Telegram or AdsGram availability.
+
+Latest full GitHub Actions verification for code commit `09e9d3abce58fb9b833b01b408aa0f6e81d6d4df`:
+
+- Ruff passed
+- **285 tests passed**
+- PostgreSQL migrations `0001 → 0010` passed
+- full downgrade to base and restore to head passed
+- compileall passed
+- shell-script checks passed
+
+See `plans/0009-launch-hardening-and-deployment.md`.
 
 ---
 
-## 20. Pending decisions / information
+## 20. Remaining external launch work
 
-Do not guess these:
+No Plan 0009 code blocker remains. Production execution still requires:
 
-1. Production AdsGram platform/Block ID/public URL values.
-2. Production deployment topology/host and access-log redaction.
-3. Final Rich Message authoring feature set.
-4. Real-time Archive Channel edit/delete reconciliation behavior.
-5. Durable global Telegram update sequencing before webhook concurrency is increased.
+- chosen host and trusted HTTPS edge
+- real Telegram/AdsGram credentials and runtime values
+- fresh non-production database restore drill
+- authorized live source/Archive migration and verification, if still needed
+- controlled live reward/delivery/deletion smoke test
+- external monitoring/alert destination
 
-These should be resolved through explicit plans and recorded in `docs/DECISIONS.md`.
+Future product/architecture work remains separate:
+
+- advanced Rich Message owner authoring
+- visual owner button-style customization
+- durable global webhook sequencing before concurrency above one

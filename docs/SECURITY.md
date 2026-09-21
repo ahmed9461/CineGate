@@ -1,6 +1,6 @@
 # CineGate Security and Operations Notes
 
-**Last updated:** 2026-09-20
+**Last updated:** 2026-09-21
 
 This file records security-sensitive operational requirements that must not live only in chat history.
 
@@ -22,6 +22,21 @@ Archive grouping is sequence-sensitive. Do not increase Telegram webhook deliver
 - validate `X-Telegram-Bot-Api-Secret-Token`
 - never put the bot token in the webhook URL
 - do not log secret headers
+
+Webhook set/status/delete operations use the configured secret without printing it and keep `max_connections=1`.
+
+## Abuse protection boundaries
+
+Public search messages, Telegram callbacks, and reward-claim HTTP requests have bounded in-process rate limits.
+
+This state is intentionally disposable:
+
+- it may reset on restart
+- it is not shared across processes
+- it must never determine authorization, reward proof, delivery ownership, or idempotency
+- PostgreSQL constraints and state machines remain authoritative
+
+Launch therefore uses one CineGate application process. Plan and implement a shared limiter separately if a future measured deployment requires multiple processes.
 
 ## Telegram Mini App identity
 
@@ -63,7 +78,9 @@ Important:
 - do not expose it in owner/admin settings
 - reverse-proxy and Uvicorn access logging must not retain the full secret-bearing callback URL in production logs
 
-The production deployment plan must explicitly configure request-log redaction or disable access logging for this endpoint.
+Production must use CineGate's redacted structured request logs, disable raw Uvicorn access logging, and configure the HTTPS edge not to retain the unredacted path. Redaction covers the exact callback, a trailing slash, and extra path suffixes.
+
+Unexpected operations CLI errors print only the exception class. Do not change them to echo arbitrary client/library exception text, because it can contain URLs or connection strings.
 
 ## Reward public settings
 
@@ -121,6 +138,34 @@ This limitation must remain documented. Do not pretend exactly-once Telegram del
 - Telegram/network I/O should stay outside long database transactions.
 - Durable deletion workers use `FOR UPDATE SKIP LOCKED`.
 - Redis/Celery/message brokers are not currently required and must not be added without a measured need.
+
+Archive ingest and edit paths acquire locks in consistent movie→quality order. Pending ORM changes are flushed before aggregate safety status is recomputed.
+
+## Health and readiness
+
+- `/healthz` is process liveness only.
+- `/readyz` checks PostgreSQL with a bounded timeout and checks deletion-worker state.
+- readiness does not call Telegram or AdsGram.
+- a hung/failed database or failed worker returns not-ready without exposing exception payloads.
+
+## Archive edit and deletion reconciliation
+
+Bot API `edited_channel_post` updates are reconciled in real time. Invalid/conflicting edits remove the affected movie from safe searchable state, and stale duplicates cannot reactivate it while unsafe rows remain.
+
+Telegram Bot API does not expose channel-message deletion updates. `python -m cinegate.ops archive verify` is therefore an explicit read-only UserBot audit:
+
+- it never repairs/deletes records automatically
+- it reads references in bounded batches
+- start high-watermarks prevent concurrent catalog growth from making one run unbounded
+- UserBot credentials/session remain subject to the historical-import secret rules below
+
+## Database backup and restore
+
+- use a mode-`600` PostgreSQL passfile; do not put passwords in command arguments
+- backup files are created privately and published atomically only after `pg_dump` succeeds
+- failed partial backups are removed
+- restore refuses to run without an explicit guard, validates the custom-format archive, uses `--exit-on-error`, and runs in one transaction
+- test restoration only against a fresh non-production database before relying on a backup
 
 ## Secrets never committed
 

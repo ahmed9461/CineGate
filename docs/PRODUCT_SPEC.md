@@ -1,7 +1,7 @@
 # CineGate Product Specification
 
-**Status:** Initial confirmed specification.  
-**Last updated:** 2026-09-20
+**Status:** Confirmed implementation specification.
+**Last updated:** 2026-09-21
 
 ## Goal
 
@@ -126,6 +126,15 @@ A poster with no accepted quality media is not searchable. Unsafe associations a
 
 See `plans/0002-archive-format-and-parser.md`.
 
+### Archive reconciliation
+
+- Bot API `edited_channel_post` updates are reconciled in real time.
+- An invalid/conflicting poster or quality edit makes the affected movie unavailable for search.
+- A stale duplicate or a valid update to another quality cannot reactivate a movie while unsafe metadata remains.
+- Telegram Bot API does not expose channel-message deletion updates.
+- Missing Archive references are detected through the explicit, read-only, batched `python -m cinegate.ops archive verify` operation.
+- The integrity audit uses a UserBot session only while the command runs; no permanent UserBot daemon is part of normal service operation.
+
 ## Owner experience
 
 Routine owner configuration is implemented through an owner-only Telegram control center.
@@ -172,11 +181,14 @@ Design for:
 - never execute user search input
 - parameterized DB access
 - length limits
-- rate limiting
+- bounded in-process public search/callback/reward-claim rate limiting
+- rate-limiter memory is not authorization, billing, reward, delivery, or idempotency state
 - safe Telegram init data validation for Mini App identity
 - reward replay protection
 - no secrets in DB-exposed admin messages
 - no UserBot session material in Git
+- structured logs must redact the AdsGram secret callback path
+- raw Uvicorn/reverse-proxy access logs must not retain that path
 
 ## Reliability
 
@@ -193,12 +205,14 @@ Must handle safely:
 - Telegram API failures
 - ad provider failures
 - database failures
+- application process failure during startup/shutdown
+- concurrent Archive edit/ingest operations
 
 ## Not finalized
 
 - production AdsGram Block ID/platform/public URL values
-- production deployment topology and callback access-log redaction
-- real-time archive edit/delete reconciliation behavior
+- production host and trusted HTTPS edge
+- external monitoring/alert destination
 - final Rich Message owner-editor feature set
 - durable global webhook sequencing before webhook concurrency is increased
 

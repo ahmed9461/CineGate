@@ -523,3 +523,88 @@ Historical importer code is complete.
 ### Exact next step
 
 Create `plans/0009-launch-hardening-and-deployment.md` before application-level rate limiting, structured/redacted logging, readiness, backup/restore, webhook tooling, deployment/runbook, real-time Archive edit/delete reconciliation, and controlled live Telegram validation.
+
+
+---
+
+## 2026-09-21 — Launch hardening and deployment completed
+
+### Plan
+
+- `plans/0009-launch-hardening-and-deployment.md` — completed
+
+### Implemented
+
+- bounded public search, callback, and HTTP reward-claim rate limits
+- throttled blocked-search feedback and bounded limiter memory
+- structured JSON application/request logging
+- AdsGram secret callback-path redaction
+- liveness plus bounded PostgreSQL/deletion-worker readiness
+- webhook set/status/delete CLI with explicit allowed updates and `max_connections=1`
+- real-time `edited_channel_post` reconciliation
+- safe movie status recomputation after invalid/repaired Archive edits
+- read-only, batched, high-watermark-bounded Archive reference audit
+- atomic PostgreSQL backup and guarded, validated, single-transaction restore scripts
+- production deployment/backup runbooks
+- hardened single-process systemd example
+- controlled production launch checklist
+
+### Correctness/security review
+
+Found and fixed:
+
+- invalid Archive edits could be reactivated by stale duplicate/other-quality updates
+- pending SQLAlchemy edit state had to be flushed before aggregate status recomputation
+- quality edit and ingest paths had inverse lock order and a deadlock window
+- AdsGram path redaction did not cover trailing path variants
+- unexpected operations CLI exceptions could expose secret-bearing payloads
+- Bot/gateway/database/runtime cleanup was incomplete on selected failure paths
+- restore lacked archive validation, exit-on-error, and one-transaction enforcement
+- backup output could expose a failed partial file
+
+Confirmed:
+
+- rate-limiter state is never used for authorization/reward/delivery correctness
+- rewarded delivery remains bound to the exact safe quality row
+- integrity audit is read-only
+- Telegram/network calls are not held inside long database transactions
+
+### Performance/complexity review
+
+Confirmed/fixed:
+
+- limiter key/deque growth and blocked-notice frequency are bounded
+- readiness performs one bounded-time `SELECT 1` and no external API calls
+- Archive edits reparse only the affected group
+- integrity audit uses bounded database/Telegram batches and start high-watermarks
+- Telethon remains optional and is loaded only for importer/audit operations
+- no Redis, broker, permanent UserBot daemon, extra service, or dependency was added
+
+### CI failures resolved during closeout
+
+- added the restore `--single-transaction` guarantee required by the existing safety test
+- fixed stale ORM aggregate state exposed by the repaired-quality integration test
+- fixed concurrent edit/ingest lock ordering rather than weakening either test
+
+### Verification
+
+GitHub Actions run `35613474434` for commit `09e9d3abce58fb9b833b01b408aa0f6e81d6d4df`:
+
+- Ruff: passed
+- pytest: **285 passed**
+- PostgreSQL migrations `0001 → 0010`: passed
+- full downgrade to base and restore to head: passed
+- compileall: passed
+- shell-script syntax checks: passed
+
+### External-live limitations
+
+CI cannot supply the owner's production Telegram/AdsGram credentials, authenticated UserBot session, authorized channels, public HTTPS edge, or alert destination. A fresh non-production restore drill and controlled live end-to-end launch checklist therefore remain operator execution, not missing Plan 0009 code.
+
+### Current stop point
+
+Plan 0009 implementation and repository documentation are complete.
+
+### Exact next step
+
+Deploy the verified `main` revision on the chosen host and execute `docs/LAUNCH_CHECKLIST.md`, retaining webhook `max_connections=1`.

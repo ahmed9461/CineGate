@@ -21,7 +21,7 @@ This roadmap is directional. Every phase requires its own detailed plan file bef
 - [x] Define title/year extraction and normalization direction
 - [x] Define incomplete/ambiguous group handling
 - [x] Define duplicate/idempotency requirements
-- [ ] Define real-time edit/delete reconciliation behavior
+- [x] Define real-time edit/delete reconciliation behavior
 - [x] Implement parser fixtures/tests before production indexing
 
 **Specification:** `plans/0002-archive-format-and-parser.md`  
@@ -34,7 +34,7 @@ This roadmap is directional. Every phase requires its own detailed plan file bef
 - [x] Define service boundaries
 - [x] Configuration/secret model
 - [x] Database migrations
-- [ ] Logging and error model
+- [x] Logging and error model
 - [x] Owner bootstrap/access control
 - [x] Basic health/diagnostics
 
@@ -62,10 +62,11 @@ This roadmap is directional. Every phase requires its own detailed plan file bef
 - [x] Relevance thresholds
 - [x] Result buttons
 - [x] No-result template
-- [ ] Input/rate-limit protections
+- [x] Input/rate-limit protections
 - [ ] Search metrics/debugging
 
 **Search/movie-page implementation:** `plans/0005-search-and-movie-page.md`
+**Launch hardening:** `plans/0009-launch-hardening-and-deployment.md`
 
 ## Phase 5 — Movie page & quality selection
 
@@ -128,13 +129,17 @@ This roadmap is directional. Every phase requires its own detailed plan file bef
 ## Phase 10 — Hardening & launch
 
 - [x] Full automated test suite
-- [ ] Abuse/rate-limit tests
+- [x] Abuse/rate-limit tests
 - [x] Duplicate/retry/race tests
 - [x] Restart/recovery tests
 - [x] Security review
 - [x] Performance/load review
-- [ ] Backup/restore test
-- [ ] Deployment runbook
-- [ ] Monitoring/alerts
+- [x] Backup/restore scripts and command-path tests
+- [ ] Fresh non-production restore drill
+- [x] Deployment runbook
+- [x] Health/readiness and structured operational logging
+- [ ] External monitoring/alert delivery
 - [ ] Live initial archive migration
-- [ ] Production launch checklist
+- [x] Production launch checklist
+
+**Implementation:** `plans/0009-launch-hardening-and-deployment.md`
