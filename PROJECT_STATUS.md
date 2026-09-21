@@ -1,8 +1,8 @@
 # CineGate Project Status
 
-**Last updated:** 2026-09-20  
-**Overall status:** 🟢 Owner control center complete; historical archive import next  
-**Code status:** Plans 0003–0007 are implemented and CI-verified.
+**Last updated:** 2026-09-21  
+**Overall status:** 🟢 Historical import complete; launch hardening next  
+**Code status:** Plans 0003–0008 are implemented and CI-verified.
 
 ## Completed
 
@@ -24,19 +24,31 @@
 - DB-backed runtime settings with no restart requirement.
 - Formatted Telegram template editing with entities preserved.
 - Durable owner edit sessions and audit log.
-- Owner status/diagnostics for archive/rewards/deletion problems.
-- Owner edit messages restricted to private chat.
-- Admin callbacks/keys allowlisted and rapid edits serialized.
+- Owner status/diagnostics.
+- One-time historical UserBot importer.
+- Telethon importer-only dependency and separate CLI.
+- Durable source→Archive import jobs and message mapping.
+- Crash reconciliation after Telegram-forward/DB-commit interruption.
+- Bounded oldest→newest historical transfer.
+- Protected source/Archive preflight checks; no content-protection bypass.
+- Bounded FloodWait handling.
+- Resumable sequential historical reindex.
+- Read-only mapping verification.
+- Rate-limited CLI/owner progress reporting.
+- Late historical owner-notification suppression by durable mapping.
+- Owner diagnostics for latest historical import.
+- Migration `0010`.
 
 ## Verification
 
-Latest full verification after Plan 0007:
+Latest full verification after Plan 0008:
 
 - Ruff: passed
-- pytest: **176 passed**
-- PostgreSQL 16 migrations `0001 → 0009`: passed
+- pytest: **230 passed**
+- PostgreSQL 16 migrations `0001 → 0010`: passed
 - full downgrade to base + restore to head: passed
 - Python compileall: passed
+- optional Telethon importer dependency installs in CI
 
 The two warnings are dependency deprecation notices from FastAPI/Starlette internals, not CineGate code.
 
@@ -46,66 +58,74 @@ Implemented:
 
 `type title → results → movie poster/info → choose quality → reward Mini App → verified reward → quality copied from archive → durable timed deletion`
 
-Owner runtime configuration is available from Telegram without source edits/restart.
-
 ## Current owner flow
 
 `/admin → settings/templates/status/diagnostics → edit/preview/reset → PostgreSQL + audit`
 
-Sensitive bootstrap values remain environment-only.
+## Historical import flow
+
+Implemented CLI:
+
+`python -m cinegate.importer auth|run|transfer|reindex|status|verify`
+
+Properties:
+
+- separate one-time UserBot process
+- no movie-media download/re-upload
+- durable resume/checkpoints
+- source high-watermark snapshot
+- crash reconciliation
+- bounded batches
+- sequential idempotent reindex
+- progress/final summary
 
 ## Next exact step
 
-Create and implement `plans/0008-historical-archive-import-and-reindex.md`.
+Create `plans/0009-launch-hardening-and-deployment.md` before implementation.
 
 Primary scope:
 
-1. one-time UserBot historical migration
-2. Telethon 1.45.x as importer-only dependency
-3. separate CLI process; no long-running UserBot service
-4. owner-provided original source channel ID
-5. resumable source→Archive Channel transfer
-6. durable source→archive message mapping
-7. crash reconciliation before retry
-8. bounded batches and FloodWait handling
-9. bulk-import notification suppression
-10. sequential historical reindex using existing archive indexer
-11. progress + final summary
-12. large-history validation without loading media files
-13. session/API credentials never committed
-14. owner manually disables source content protection before import; CineGate does not bypass it
+1. user abuse/rate limiting for search/callbacks
+2. structured/redacted application logging
+3. production health/readiness checks
+4. webhook registration/verification tooling
+5. backup/restore procedures and tests
+6. deployment/systemd or container runbook
+7. startup configuration validation
+8. real-time Archive edit/delete reconciliation
+9. production-safe log/access-log redaction
+10. operational monitoring/diagnostics
+11. controlled live Telegram validation checklist
+12. final load/rapid-click/restart testing
 
 ## Operational safety rules
 
 - Production webhook registration remains `max_connections=1` until durable global sequencing exists.
 - Production access logging must not expose the secret-bearing AdsGram Reward URL.
-- UserBot session files are secrets and remain outside Git.
-- Historical importer must not download/re-upload movie media.
-- Source content protection must be disabled by an authorized owner before transfer; importer does not bypass it.
+- UserBot session files/API hash are secrets and remain outside Git/logs.
+- Historical importer does not bypass Telegram content protection.
+- Archive Channel content protection must remain disabled for user delivery.
+- Live migration/launch validation must use channels the owner is authorized to operate.
 
 ## Open decisions
 
 - [ ] production AdsGram Block ID/platform/public URL
 - [ ] production hosting/deployment topology
-- [ ] real-time archive edit/delete reconciliation
+- [ ] real-time Archive edit/delete reconciliation
 - [ ] advanced Rich Message authoring
 - [ ] visual owner button-style customization
 - [ ] global webhook sequencer before concurrency > 1
 
 ## Active plan
 
-`plans/0007-owner-control-center.md` — **Completed**
+`plans/0008-historical-archive-import-and-reindex.md` — **Completed**
 
 ## Blockers
 
-None for Plan 0008 implementation.
+None for Plan 0009 code work.
 
-Live historical transfer will later require:
-- Telegram API ID/hash
-- an authenticated UserBot session
-- owner access to both channels
-- original-channel forwarding restriction temporarily disabled
+External live validation later requires actual production credentials, channels, public HTTPS endpoint, and AdsGram values.
 
 ## Resume instruction
 
-Read `AGENTS.md`, `PROJECT_MEMORY.md`, this file, `docs/SECURITY.md`, and Plans 0002–0007 before starting Plan 0008.
+Read `AGENTS.md`, `PROJECT_MEMORY.md`, this file, `docs/SECURITY.md`, and Plans 0002–0008 before starting Plan 0009.
