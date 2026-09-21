@@ -15,7 +15,6 @@ from cinegate.importer.config import (
     ImporterTelegramSettings,
 )
 from cinegate.importer.errors import HistoricalImportError
-from cinegate.importer.gateway import HistoricalTelegramGateway
 from cinegate.services.archive_integrity import (
     ArchiveIntegrityAuditService,
     ArchiveIntegrityReport,
@@ -150,6 +149,8 @@ async def _webhook_command(args) -> int:
 
 
 async def _archive_verify(args) -> int:
+    from cinegate.importer.gateway import HistoricalTelegramGateway
+
     database_settings = ImporterDatabaseSettings()
     telegram_settings = ImporterTelegramSettings()
     database = Database(
