@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import os
+import subprocess
+import sys
 from types import SimpleNamespace
 
 import pytest
@@ -268,3 +270,23 @@ async def test_webhook_status_accepts_allowed_updates_in_different_order(
     result = await operations.status()
 
     assert result.matches_expected
+
+
+
+def test_webhook_ops_cli_import_does_not_load_optional_telethon() -> None:
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import sys; "
+                "import cinegate.ops.cli; "
+                "assert 'telethon' not in sys.modules"
+            ),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert completed.returncode == 0, completed.stderr
