@@ -68,6 +68,10 @@ def build_reward_router() -> APIRouter:
         request: Request,
     ) -> JSONResponse:
         runtime = request.app.state.runtime
+        _enforce_reward_claim_limit(
+            runtime,
+            ("session", str(session_id)),
+        )
 
         async with runtime.database.session() as session:
             value = await SettingsRepository(session).get_int(
@@ -86,6 +90,11 @@ def build_reward_router() -> APIRouter:
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="invalid Telegram Mini App identity",
             ) from exc
+
+        _enforce_reward_claim_limit(
+            runtime,
+            ("user", telegram_user_id),
+        )
 
         try:
             reward = await runtime.rewards.mark_client_completed(
@@ -149,6 +158,23 @@ def build_reward_router() -> APIRouter:
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     return router
+
+
+def _enforce_reward_claim_limit(runtime, key) -> None:
+    abuse = getattr(runtime, "abuse", None)
+    if abuse is None:
+        return
+
+    decision = abuse.reward_claim.check(key)
+    if decision.allowed:
+        return
+
+    retry_after = max(1, int(decision.retry_after + 0.999))
+    raise HTTPException(
+        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+        detail="too many reward claim requests",
+        headers={"Retry-After": str(retry_after)},
+    )
 
 
 def _bounded_init_data_max_age(value: int | None) -> int:
