@@ -22,6 +22,7 @@ from cinegate.db.models import (
     UserSearchSession,
 )
 from cinegate.db.session import Database
+from cinegate.domain.delivery import RewardNotReady
 from cinegate.presentation.templates import serialize_entities
 from cinegate.services.delivery import DeliveryService
 from cinegate.services.reward_sessions import RewardSessionService
@@ -321,3 +322,59 @@ async def test_delivery_caption_entities_are_passed_to_copy_message(setup) -> No
     assert call["caption_entities"][0].length == (
         len("Top Gun".encode("utf-16-le")) // 2
     )
+
+
+
+@pytest.mark.asyncio
+async def test_ambiguous_movie_blocks_delivery_without_losing_reward(setup) -> None:
+    database, bot, delivery, reward, _quality_id = setup
+
+    async with database.session() as session, session.begin():
+        movie = await session.get(Movie, reward.movie_id)
+        assert movie is not None
+        movie.status = "ambiguous"
+
+    with pytest.raises(RewardNotReady, match="not currently safe"):
+        await delivery.deliver(reward.id)
+
+    async with database.session() as session:
+        reward_row = await session.get(RewardSession, reward.id)
+
+    assert reward_row is not None
+    assert reward_row.status == "rewarded"
+    assert bot.copies == []
+
+
+@pytest.mark.asyncio
+async def test_archive_quality_change_cannot_change_exact_reward_binding(setup) -> None:
+    database, bot, delivery, reward, quality_id = setup
+
+    async with database.session() as session, session.begin():
+        quality = await session.get(MovieQuality, quality_id)
+        assert quality is not None
+        quality.quality = "1080p"
+
+    with pytest.raises(RewardNotReady, match="binding no longer matches"):
+        await delivery.deliver(reward.id)
+
+    async with database.session() as session:
+        reward_row = await session.get(RewardSession, reward.id)
+
+    assert reward_row is not None
+    assert reward_row.status == "rewarded"
+    assert bot.copies == []
+
+
+@pytest.mark.asyncio
+async def test_invalidated_quality_confidence_blocks_delivery(setup) -> None:
+    database, bot, delivery, reward, quality_id = setup
+
+    async with database.session() as session, session.begin():
+        quality = await session.get(MovieQuality, quality_id)
+        assert quality is not None
+        quality.parser_confidence = 0
+
+    with pytest.raises(RewardNotReady, match="not currently safe"):
+        await delivery.deliver(reward.id)
+
+    assert bot.copies == []
