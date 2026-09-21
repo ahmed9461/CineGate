@@ -429,3 +429,97 @@ Owner runtime configuration is complete.
 ### Exact next step
 
 Create `plans/0008-historical-archive-import-and-reindex.md` before implementing the one-time Telethon UserBot migration, durable resume mapping, bulk-import progress, and sequential historical reindex.
+
+
+---
+
+## 2026-09-21 — Historical archive import and reindex completed
+
+### Plan
+
+- `plans/0008-historical-archive-import-and-reindex.md` — completed
+
+### Implemented
+
+- Telethon 1.45.x importer-only optional dependency
+- separate UserBot CLI process
+- commands:
+  - `auth`
+  - `run`
+  - `transfer`
+  - `reindex`
+  - `status`
+  - `verify`
+- owner-editable `source_channel_id`
+- migration `0010`
+- durable `archive_import_jobs`
+- durable `archive_import_message_map`
+- source high-watermark snapshots
+- bounded oldest→newest Telegram-side forwarding
+- PostgreSQL advisory lock per source/archive pair
+- crash reconciliation from Archive forward metadata
+- bounded FloodWait handling
+- protected source/Archive preflight checks
+- resumable sequential reindex
+- idempotent full replay
+- read-only mapping verification
+- bounded CLI and owner progress reporting
+- owner diagnostics/status for latest import
+- historical notification suppression, including delayed mapped webhook events
+
+### Correctness/security review
+
+Found and fixed:
+
+- source protection must be refused rather than bypassed
+- Archive Channel protection must also be disabled before migration
+- UserBot session/API hash/login/2FA material remains outside Git/logging
+- `MessageEmpty` and service messages must not enter forwarding
+- source snapshot must not chase posts published after start
+- destination message IDs must be monotonic
+- Telegram-forward/DB-commit crash window must reconcile before retry
+- transfer while reindexing must be rejected
+- paused/failed reindex may resume only after transfer checkpoint reached high-watermark
+- live `run` must validate Archive runtime configuration before transfer starts
+- progress/reporting failure must not abort core transfer
+- delayed historical webhooks must remain notification-suppressed by durable mapping
+
+### Performance/complexity review
+
+Confirmed/fixed:
+
+- no `download_media` usage
+- no media files materialized on CineGate host
+- source history is streamed
+- forward batch defaults to 25 and is bounded to 100
+- mapping/checkpoint writes are incremental
+- reindex batches are bounded
+- Telethon dialog/entity cache is populated once per session
+- CLI output is rate-limited
+- owner progress attempts are rate-limited even when they fail
+- one Telegram progress message is edited instead of per-message spam
+- no Redis/Celery/broker/permanent UserBot daemon introduced
+- stale bulk-notification suppression expires when heartbeat stops
+
+### Verification
+
+Latest full GitHub Actions verification:
+
+- Ruff: passed
+- pytest: **230 passed**
+- PostgreSQL migrations `0001→0010`: passed
+- full downgrade to base + restore to head: passed
+- compileall: passed
+- optional Telethon importer dependency installs in CI
+
+### External-live note
+
+The importer is fully implemented and integration-tested using deterministic fake Telegram boundaries. A real source→Archive migration has not been executed in CI because it requires owner Telegram API credentials, authenticated UserBot session, channel permissions, and temporary protection changes.
+
+### Current stop point
+
+Historical importer code is complete.
+
+### Exact next step
+
+Create `plans/0009-launch-hardening-and-deployment.md` before application-level rate limiting, structured/redacted logging, readiness, backup/restore, webhook tooling, deployment/runbook, real-time Archive edit/delete reconciliation, and controlled live Telegram validation.
