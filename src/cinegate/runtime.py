@@ -4,6 +4,8 @@ import asyncio
 from dataclasses import dataclass, field
 
 from aiogram import Bot, Dispatcher
+from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 
 from cinegate.admin.diagnostics import AdminDiagnosticsService
 from cinegate.admin.service import OwnerAdminService
@@ -42,6 +44,20 @@ class AppRuntime:
                 self.deletion_worker.run(self.stop_event),
                 name="cinegate-delivery-deletion",
             )
+
+    async def check_ready(self) -> tuple[bool, str]:
+        if self.worker_task is None:
+            return False, "deletion worker not started"
+        if self.worker_task.done():
+            return False, "deletion worker stopped"
+
+        try:
+            async with self.database.session() as session:
+                await session.execute(text("SELECT 1"))
+        except SQLAlchemyError:
+            return False, "database unavailable"
+
+        return True, "ready"
 
     async def close(self) -> None:
         self.stop_event.set()
