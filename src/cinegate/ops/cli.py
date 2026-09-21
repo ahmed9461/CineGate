@@ -160,8 +160,10 @@ async def _archive_verify(args) -> int:
         session_path=args.session,
     )
 
-    await gateway.connect_authorized()
+    connected = False
     try:
+        await gateway.connect_authorized()
+        connected = True
         report = await ArchiveIntegrityAuditService(
             database=database,
             gateway=gateway,
@@ -170,7 +172,8 @@ async def _archive_verify(args) -> int:
         _print_archive_integrity(report)
         return 0 if report.ok else 3
     finally:
-        await gateway.disconnect()
+        if connected:
+            await gateway.disconnect()
         await database.dispose()
 
 
