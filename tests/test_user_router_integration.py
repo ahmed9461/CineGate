@@ -637,3 +637,41 @@ async def test_rapid_user_callback_is_rate_limited_before_state_machine(
     assert len(bot.copied) == 1
     assert second.answers
     assert "طلباتك سريعة جدًا" in (second.answers[-1][0] or "")
+
+
+
+@pytest.mark.asyncio
+async def test_repeated_blocked_searches_emit_one_cooldown_notice(
+    database: Database,
+) -> None:
+    await seed_movie(database)
+    abuse = strict_abuse_protection()
+    abuse.notice = SlidingWindowLimiter(
+        limit=1,
+        window_seconds=60,
+        max_keys=100,
+    )
+    router = build_user_router(
+        database=database,
+        search=MovieSearchService(database),
+        sessions=SearchSessionService(database),
+        rewards=RewardSessionService(database),
+        abuse=abuse,
+    )
+    bot = FakeBot()
+    search_handler = handler(router, "message", "direct_movie_search")
+
+    allowed = FakeIncomingMessage("Interstellar")
+    blocked_one = FakeIncomingMessage("Interstellar")
+    blocked_two = FakeIncomingMessage("Interstellar")
+    blocked_three = FakeIncomingMessage("Interstellar")
+
+    await search_handler(allowed, bot=bot)
+    await search_handler(blocked_one, bot=bot)
+    await search_handler(blocked_two, bot=bot)
+    await search_handler(blocked_three, bot=bot)
+
+    assert len(blocked_one.answers) == 1
+    assert "طلباتك سريعة جدًا" in blocked_one.answers[0].text
+    assert blocked_two.answers == []
+    assert blocked_three.answers == []
