@@ -237,3 +237,34 @@ async def test_webhook_status_accepts_allowed_updates_in_different_order(
     result = await operations.status()
 
     assert result.matches_expected
+
+
+
+@pytest.mark.asyncio
+async def test_webhook_status_accepts_allowed_updates_in_different_order(
+    database: Database,
+) -> None:
+    await set_public_url(database, "https://cinegate.example")
+    bot = FakeBot()
+    bot.info = SimpleNamespace(
+        url="https://cinegate.example/telegram/webhook",
+        pending_update_count=0,
+        max_connections=1,
+        allowed_updates=[
+            "edited_channel_post",
+            "channel_post",
+            "callback_query",
+            "message",
+        ],
+        last_error_date=None,
+        last_error_message=None,
+    )
+    operations = WebhookOperations(
+        database=database,
+        bot=bot,  # type: ignore[arg-type]
+        webhook_secret=WEBHOOK_SECRET,
+    )
+
+    result = await operations.status()
+
+    assert result.matches_expected
