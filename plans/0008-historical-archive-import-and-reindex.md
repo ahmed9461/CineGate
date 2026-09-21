@@ -1,8 +1,8 @@
 # Plan 0008 — Historical archive import and reindex
 
-**Status:** In progress  
+**Status:** Completed  
 **Created:** 2026-09-20  
-**Last updated:** 2026-09-20
+**Last updated:** 2026-09-21
 
 ## Objective
 
@@ -273,68 +273,68 @@ Secrets/session paths are not exposed.
 
 ### Configuration / auth boundary
 
-- [ ] importer config requires API ID/hash pair
-- [ ] default session path is ignored by Git
-- [ ] unauthorized session refuses `run`
-- [ ] source/archive equality rejected
-- [ ] forwarding-protected source rejected before transfer
+- [x] importer config requires API ID/hash pair
+- [x] default session path is ignored by Git
+- [x] unauthorized session refuses `run`
+- [x] source/archive equality rejected
+- [x] forwarding-protected source rejected before transfer
 
 ### Job persistence
 
-- [ ] create/reuse source+archive job
-- [ ] source/archive high watermarks stored once
-- [ ] one concurrent importer wins advisory lock
-- [ ] status transitions valid
-- [ ] checkpoints survive service recreation
+- [x] create/reuse source+archive job
+- [x] source/archive high watermarks stored once
+- [x] one concurrent importer wins advisory lock
+- [x] status transitions valid
+- [x] checkpoints survive service recreation
 
 ### Transfer
 
-- [ ] source processed oldest→newest
-- [ ] bounded batch size
-- [ ] service messages skipped safely
-- [ ] successful batch maps source→archive IDs
-- [ ] repeated mapped source messages are not forwarded again
-- [ ] destination IDs must be monotonic
-- [ ] Telegram media is never downloaded
-- [ ] large fake history stays bounded to configured batch
+- [x] source processed oldest→newest
+- [x] bounded batch size
+- [x] service messages skipped safely
+- [x] successful batch maps source→archive IDs
+- [x] repeated mapped source messages are not forwarded again
+- [x] destination IDs must be monotonic
+- [x] Telegram media is never downloaded
+- [x] large fake history stays bounded to configured batch
 
 ### Crash reconciliation
 
-- [ ] simulated forward-before-DB-crash is recovered from archive forward metadata
-- [ ] recovered map prevents duplicate forward
-- [ ] unrelated archive forwards are ignored
-- [ ] duplicate reconciliation is idempotent
+- [x] simulated forward-before-DB-crash is recovered from archive forward metadata
+- [x] recovered map prevents duplicate forward
+- [x] unrelated archive forwards are ignored
+- [x] duplicate reconciliation is idempotent
 
 ### FloodWait / failures
 
-- [ ] short FloodWait waits/resumes
-- [ ] excessive FloodWait pauses job
-- [ ] forwarding restriction pauses with actionable error
-- [ ] write-permission failure does not advance checkpoint
+- [x] short FloodWait waits/resumes
+- [x] excessive FloodWait pauses job
+- [x] forwarding restriction pauses with actionable error
+- [x] write-permission failure does not advance checkpoint
 
 ### Reindex
 
-- [ ] mapped archive messages replay in source order
-- [ ] resume from last reindexed checkpoint
-- [ ] full replay is idempotent
-- [ ] missing destination message increments diagnostic
-- [ ] existing live-indexed rows do not duplicate
-- [ ] final status only completes after reindex finishes
+- [x] mapped archive messages replay in source order
+- [x] resume from last reindexed checkpoint
+- [x] full replay is idempotent
+- [x] missing destination message increments diagnostic
+- [x] existing live-indexed rows do not duplicate
+- [x] final status only completes after reindex finishes
 
 ### Notification suppression/progress
 
-- [ ] historical active job suppresses per-film owner notification
-- [ ] normal archive notification resumes after import
-- [ ] progress updates are rate/batch bounded
-- [ ] final summary contains transfer + reindex totals
+- [x] historical active job suppresses per-film owner notification
+- [x] normal archive notification resumes after import
+- [x] progress updates are rate/batch bounded
+- [x] final summary contains transfer + reindex totals
 
 ### Quality gates
 
-- [ ] Ruff
-- [ ] pytest
-- [ ] migration apply / downgrade / restore
-- [ ] compileall
-- [ ] importer optional dependency installs in CI
+- [x] Ruff
+- [x] pytest
+- [x] migration apply / downgrade / restore
+- [x] compileall
+- [x] importer optional dependency installs in CI
 
 ## Review #1 — correctness/security
 
@@ -368,54 +368,130 @@ Inspect:
 
 ## Acceptance criteria
 
-- [ ] Telethon is importer-only optional dependency
-- [ ] interactive auth creates ignored session file
-- [ ] historical transfer can stop/restart without blind duplication
-- [ ] importer never downloads movie media
-- [ ] protected source is refused, not bypassed
-- [ ] durable source→archive mapping exists
-- [ ] crash reconciliation works
-- [ ] sequential reindex completes/resumes
-- [ ] per-film notification spam is suppressed during bulk import
-- [ ] progress/final summary available
-- [ ] large-history test demonstrates bounded batching
-- [ ] full CI passes
-- [ ] both reviews documented
-- [ ] memory/status/roadmap/progress updated
+- [x] Telethon is importer-only optional dependency
+- [x] interactive auth creates ignored session file
+- [x] historical transfer can stop/restart without blind duplication
+- [x] importer never downloads movie media
+- [x] protected source is refused, not bypassed
+- [x] durable source→archive mapping exists
+- [x] crash reconciliation works
+- [x] sequential reindex completes/resumes
+- [x] per-film notification spam is suppressed during bulk import
+- [x] progress/final summary available
+- [x] large-history test demonstrates bounded batching
+- [x] full CI passes
+- [x] both reviews documented
+- [x] memory/status/roadmap/progress updated
 
 ## Implementation steps
 
 - [x] 1. Create this plan before code.
-- [ ] 2. Add Telethon importer optional dependency + CI install.
-- [ ] 3. Add importer secrets/bootstrap config.
-- [ ] 4. Add source_channel_id owner setting.
-- [ ] 5. Add import job/message-map models + migration.
-- [ ] 6. Implement import repository/state machine.
-- [ ] 7. Implement Telethon adapter/auth boundary.
-- [ ] 8. Implement source history iterator + bounded forwarding.
-- [ ] 9. Implement crash reconciliation from forward metadata.
-- [ ] 10. Implement bulk-notification suppression.
-- [ ] 11. Implement sequential mapped-message reindex.
-- [ ] 12. Implement progress/final summary reporter.
-- [ ] 13. Implement CLI commands.
-- [ ] 14. Add importer/admin diagnostics integration.
-- [ ] 15. Add unit/integration tests.
-- [ ] 16. Run CI.
-- [ ] 17. Correctness/security review.
-- [ ] 18. Performance/complexity review.
-- [ ] 19. Final CI.
-- [ ] 20. Update docs/memory/status/roadmap.
-- [ ] 21. Mark complete.
+- [x] 2. Add Telethon importer optional dependency + CI install.
+- [x] 3. Add importer secrets/bootstrap config.
+- [x] 4. Add source_channel_id owner setting.
+- [x] 5. Add import job/message-map models + migration.
+- [x] 6. Implement import repository/state machine.
+- [x] 7. Implement Telethon adapter/auth boundary.
+- [x] 8. Implement source history iterator + bounded forwarding.
+- [x] 9. Implement crash reconciliation from forward metadata.
+- [x] 10. Implement bulk-notification suppression.
+- [x] 11. Implement sequential mapped-message reindex.
+- [x] 12. Implement progress/final summary reporter.
+- [x] 13. Implement CLI commands.
+- [x] 14. Add importer/admin diagnostics integration.
+- [x] 15. Add unit/integration tests.
+- [x] 16. Run CI.
+- [x] 17. Correctness/security review.
+- [x] 18. Performance/complexity review.
+- [x] 19. Final CI.
+- [x] 20. Update docs/memory/status/roadmap.
+- [x] 21. Mark complete.
 
 ## Progress notes
 
-### 2026-09-20
+### 2026-09-20 — planning and implementation
 
 - Plan created before implementation.
 - Telethon 1.45.0 verified as latest stable release.
-- Importer will remain an optional one-time CLI dependency.
-- Source protection bypass is explicitly out of scope.
+- Telethon added only as an optional importer dependency.
+- Added migration `0010` with durable import jobs and source→archive mappings.
+- Implemented CLI commands:
+  - `auth`
+  - `run`
+  - `transfer`
+  - `reindex`
+  - `status`
+  - `verify`
+- Implemented historical snapshot high-watermark semantics.
+- Implemented oldest→newest bounded Telegram-side forwarding.
+- Implemented crash reconciliation from Archive forward metadata.
+- Implemented PostgreSQL advisory locking per source/archive pair.
+- Implemented bounded FloodWait handling and safe protection/permission failures.
+- Implemented sequential resumable reindex through the existing Archive indexer.
+- Implemented owner progress reporting with one rate-limited Telegram message.
+- Added owner diagnostics/status for latest historical import.
+- Added durable suppression for historical per-film owner notifications, including late mapped webhook deliveries after import completion.
+
+### 2026-09-21 — review #1: correctness/security
+
+Findings and fixes:
+
+- Source forwarding protection is refused; no bypass/toggle path exists.
+- Protected Archive Channel is also rejected before transfer because later Bot API delivery requires copyable media.
+- UserBot session/API hash/login-code/2FA material stays outside logs/repository.
+- `MessageEmpty` and service messages are skipped safely.
+- Source high-watermark is frozen once so newly published posts are not chased by the historical snapshot.
+- Source and destination message IDs are required to be strictly ordered where mapping depends on order.
+- Telegram-forward-success / DB-commit crash window is reconciled from durable forward metadata before retry.
+- Mapping writes and checkpoints are idempotent.
+- Invalid import status transitions are rejected.
+- `transfer` is rejected while reindex is active.
+- Paused/failed reindex can resume only after transfer checkpoint reached the source high-watermark.
+- `run` validates that the selected Archive matches CineGate runtime configuration before transfer starts.
+- `verify` is read-only and detects missing/mismatched Archive mappings.
+- Progress/reporting failure is isolated from core transfer correctness.
+- Historical mapped messages remain notification-suppressed even if their webhook arrives after Job completion.
+- No `download_media` usage exists in the repository.
+
+### 2026-09-21 — review #2: performance/complexity
+
+Confirmed/fixed:
+
+- UserBot is a separate CLI process; no permanent daemon is added.
+- Source history streams incrementally; the full history is never materialized in memory.
+- Default forward batch is 25 and bounded to 100.
+- Reindex mapping fetch is bounded.
+- Large-history tests verify batch bounds.
+- Dialog/entity cache is populated once per Telethon session instead of per channel lookup.
+- CLI output is rate-limited.
+- Owner Telegram progress attempts are rate-limited even when configuration/network calls fail.
+- Progress uses one Telegram message rather than per-message spam.
+- DB mapping/checkpoint writes are incremental.
+- PostgreSQL advisory locking prevents duplicate import workers without Redis/Celery/broker.
+- Bulk notification suppression expires if a running/reindexing job loses its heartbeat.
+- No extra media storage or file I/O path was introduced.
+
+### 2026-09-21 — final verification
+
+Latest full GitHub Actions verification on `main`:
+
+- Ruff: **all checks passed**
+- pytest: **230 passed**
+- PostgreSQL migrations: **0001 → 0010 passed**
+- full downgrade to base + restore to head: **passed**
+- Python compileall: **passed**
+- optional Telethon importer dependency installed in CI
+
+Two warnings remain dependency deprecation notices from FastAPI/Starlette internals, not CineGate code.
+
+### External-live validation note
+
+The importer implementation is complete and fully exercised through deterministic integration/fake-Telegram tests. A real historical Telegram migration has **not** been executed in CI because it requires the owner's Telegram API credentials, authenticated UserBot session, channel access, and temporary source protection change. That live operational validation belongs to launch/deployment work and must use authorized channels only.
 
 ## Completion summary
 
-Pending.
+Plan 0008 is complete.
+
+CineGate now has a separate, resumable, bounded one-time historical importer with durable source→Archive mapping, crash reconciliation, sequential reindex, CLI/status/verification tools, progress reporting, owner diagnostics, and explicit content-protection/security boundaries.
+
+**Next exact step:** create Plan 0009 for launch hardening: application-level abuse/rate limits, structured/redacted logging, backup/restore, deployment/runbook, health/readiness, webhook registration discipline, real-time Archive edit/delete reconciliation, and controlled live Telegram validation.
