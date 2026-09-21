@@ -40,17 +40,18 @@ This roadmap is directional. Every phase requires its own detailed plan file bef
 
 ## Phase 3 — Archive indexing & initial import
 
-- [ ] Archive bot permissions
+- [x] Archive bot permissions
 - [x] Archive event ingestion
 - [x] Idempotent indexing
 - [x] Movie + quality persistence
 - [x] Owner “saved posts” notifications
-- [ ] One-time UserBot importer
-- [ ] Import progress/reporting
+- [x] One-time UserBot importer
+- [x] Import progress/reporting
 - [x] Resume/retry support
-- [ ] Large-history validation
+- [x] Large-history validation
 
-**Real-time implementation:** `plans/0004-telegram-webhook-and-archive-indexer.md`
+**Real-time implementation:** `plans/0004-telegram-webhook-and-archive-indexer.md`  
+**Historical import implementation:** `plans/0008-historical-archive-import-and-reindex.md`
 
 ## Phase 4 — Search experience
 
@@ -126,14 +127,14 @@ This roadmap is directional. Every phase requires its own detailed plan file bef
 
 ## Phase 10 — Hardening & launch
 
-- [ ] Full automated test suite
+- [x] Full automated test suite
 - [ ] Abuse/rate-limit tests
-- [ ] Duplicate/retry/race tests
-- [ ] Restart/recovery tests
-- [ ] Security review
-- [ ] Performance/load review
+- [x] Duplicate/retry/race tests
+- [x] Restart/recovery tests
+- [x] Security review
+- [x] Performance/load review
 - [ ] Backup/restore test
 - [ ] Deployment runbook
 - [ ] Monitoring/alerts
-- [ ] Initial archive migration
+- [ ] Live initial archive migration
 - [ ] Production launch checklist
