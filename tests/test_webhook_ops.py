@@ -196,3 +196,13 @@ def test_ops_cli_exposes_webhook_commands() -> None:
         parsed = parser.parse_args(["webhook", action])
         assert parsed.area == "webhook"
         assert parsed.action == action
+
+
+
+def test_ops_cli_exposes_archive_verify_command() -> None:
+    parser = build_parser()
+    parsed = parser.parse_args(["archive", "verify", "--batch-size", "50"])
+
+    assert parsed.area == "archive"
+    assert parsed.action == "verify"
+    assert parsed.batch_size == 50
