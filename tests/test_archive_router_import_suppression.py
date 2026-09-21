@@ -23,7 +23,7 @@ class FakeIndexer:
         self.calls = []
 
     async def ingest(self, *, channel_id, message):
-        self.calls.append((channel_id, message))
+        self.calls.append(("ingest", channel_id, message))
         return ArchiveIndexResult(
             action=IndexAction.QUALITY_UPSERTED,
             movie_id=123,
@@ -69,6 +69,17 @@ def fake_channel_post(message_id: int):
         video=object(),
         document=None,
         caption="Imported Movie 2025 #720p",
+    )
+
+
+
+
+
+def edited_archive_handler(router):
+    return next(
+        item.callback
+        for item in router.edited_channel_post.handlers
+        if item.callback.__name__ == "archive_channel_post_edited"
     )
 
 
@@ -216,3 +227,26 @@ async def test_new_unmapped_archive_message_notifies_after_import_completed(
 
     assert len(indexer.calls) == 1
     assert notifier.calls == [123]
+
+
+
+@pytest.mark.asyncio
+async def test_edited_channel_post_uses_reconcile_path_without_new_movie_notice(
+    database: Database,
+) -> None:
+    indexer = FakeIndexer()
+    notifier = FakeNotifier()
+    router = build_archive_router(
+        indexer,  # type: ignore[arg-type]
+        notifier,  # type: ignore[arg-type]
+        database=database,
+    )
+
+    await edited_archive_handler(router)(fake_channel_post(777))
+
+    assert len(indexer.calls) == 1
+    kind, channel_id, message = indexer.calls[0]
+    assert kind == "edit"
+    assert channel_id == ARCHIVE_ID
+    assert message.message_id == 777
+    assert notifier.calls == []
