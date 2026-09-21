@@ -32,7 +32,21 @@ if [[ "${mode}" != "600" ]]; then
   exit 2
 fi
 
+if ! pg_restore --list "${CINEGATE_RESTORE_FILE}" >/dev/null; then
+  echo "Backup file is not a readable PostgreSQL custom-format archive." >&2
+  exit 2
+fi
+
 echo "Restoring into database: ${PGDATABASE}" >&2
 echo "The target database should be fresh/empty." >&2
 
-pg_restore   --host="${PGHOST}"   --port="${PGPORT}"   --username="${PGUSER}"   --dbname="${PGDATABASE}"   --no-owner   --no-privileges   --exit-on-error   "${CINEGATE_RESTORE_FILE}"
+pg_restore \
+  --host="${PGHOST}" \
+  --port="${PGPORT}" \
+  --username="${PGUSER}" \
+  --dbname="${PGDATABASE}" \
+  --no-owner \
+  --no-privileges \
+  --single-transaction \
+  --exit-on-error \
+  "${CINEGATE_RESTORE_FILE}"

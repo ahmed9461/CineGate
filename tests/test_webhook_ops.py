@@ -11,6 +11,7 @@ from sqlalchemy import delete
 
 from cinegate.db.models import AppSetting
 from cinegate.db.session import Database
+from cinegate.ops import cli as ops_cli
 from cinegate.ops.cli import build_parser
 from cinegate.repositories.settings import SettingsRepository
 from cinegate.services.webhook_ops import (
@@ -257,3 +258,21 @@ def test_webhook_ops_cli_import_does_not_load_optional_telethon() -> None:
     )
 
     assert completed.returncode == 0, completed.stderr
+
+
+@pytest.mark.asyncio
+async def test_ops_cli_does_not_echo_unexpected_exception_payloads(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    async def fail_safely(_args) -> int:
+        raise RuntimeError("secret-bearing request URL")
+
+    monkeypatch.setattr(ops_cli, "_webhook_command", fail_safely)
+
+    exit_code = await ops_cli.async_main(["webhook", "status"])
+    captured = capsys.readouterr()
+
+    assert exit_code == 3
+    assert "RuntimeError" in captured.err
+    assert "secret-bearing" not in captured.err

@@ -61,16 +61,15 @@ class AppRuntime:
 
     async def close(self) -> None:
         self.stop_event.set()
-        if self.worker_task is not None:
-            try:
-                await self.worker_task
-            finally:
-                self.worker_task = None
-
         try:
-            await self.bot.session.close()
+            if self.worker_task is not None:
+                await self.worker_task
         finally:
-            await self.database.dispose()
+            self.worker_task = None
+            try:
+                await self.bot.session.close()
+            finally:
+                await self.database.dispose()
 
 
 def build_runtime(settings: SecretsSettings | None = None) -> AppRuntime:

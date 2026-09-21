@@ -689,3 +689,90 @@ async def test_quality_edit_conflicting_with_existing_resolution_is_safe(
         (101, "720p"),
         (102, "1080p"),
     ]
+
+
+@pytest.mark.asyncio
+async def test_invalid_edit_cannot_be_reactivated_by_stale_or_other_updates(
+    database: Database,
+) -> None:
+    await set_setting(database, "archive_channel_id", ARCHIVE_CHANNEL_ID)
+    indexer = ArchiveIndexService(database)
+
+    await indexer.ingest(
+        channel_id=ARCHIVE_CHANNEL_ID,
+        message=modern_poster(100, title="Stale Update", year=2025),
+    )
+    await indexer.ingest(
+        channel_id=ARCHIVE_CHANNEL_ID,
+        message=quality(
+            101,
+            title="Stale Update",
+            year=2025,
+            resolution="720p",
+        ),
+    )
+    await indexer.reconcile_edit(
+        channel_id=ARCHIVE_CHANNEL_ID,
+        message=ArchiveMessage(
+            message_id=101,
+            media_kind=MediaKind.VIDEO,
+            caption="Stale Update 2025",
+        ),
+    )
+
+    stale = await indexer.ingest(
+        channel_id=ARCHIVE_CHANNEL_ID,
+        message=quality(
+            101,
+            title="Stale Update",
+            year=2025,
+            resolution="720p",
+        ),
+    )
+    other_quality = await indexer.ingest(
+        channel_id=ARCHIVE_CHANNEL_ID,
+        message=quality(
+            102,
+            title="Stale Update",
+            year=2025,
+            resolution="1080p",
+        ),
+    )
+    poster_edit = await indexer.reconcile_edit(
+        channel_id=ARCHIVE_CHANNEL_ID,
+        message=modern_poster(100, title="Stale Update Corrected", year=2025),
+    )
+
+    async with database.session() as session:
+        movie = await session.scalar(select(Movie))
+        invalid = await session.scalar(
+            select(MovieQuality).where(MovieQuality.archive_message_id == 101)
+        )
+
+    assert stale.action is IndexAction.AMBIGUOUS
+    assert other_quality.action is IndexAction.AMBIGUOUS
+    assert poster_edit.action is IndexAction.AMBIGUOUS
+    assert not stale.should_notify_owner
+    assert not other_quality.should_notify_owner
+    assert movie is not None
+    assert movie.status == "ambiguous"
+    assert invalid is not None
+    assert invalid.parser_confidence == 0
+
+    repaired = await indexer.reconcile_edit(
+        channel_id=ARCHIVE_CHANNEL_ID,
+        message=quality(
+            101,
+            title="Stale Update Corrected",
+            year=2025,
+            resolution="720p",
+        ),
+    )
+
+    async with database.session() as session:
+        repaired_movie = await session.scalar(select(Movie))
+
+    assert repaired.action is IndexAction.QUALITY_UPSERTED
+    assert repaired.should_notify_owner
+    assert repaired_movie is not None
+    assert repaired_movie.status == "indexed"

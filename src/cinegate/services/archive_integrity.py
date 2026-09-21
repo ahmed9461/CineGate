@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from cinegate.db.models import Movie, MovieQuality
 from cinegate.db.session import Database
@@ -58,17 +58,22 @@ class ArchiveIntegrityAuditService:
     async def verify(self) -> ArchiveIntegrityReport:
         archive_channel_id = await self._archive_channel_id()
         archive = await self._gateway.resolve_channel(archive_channel_id)
+        poster_high_watermark, quality_high_watermark = (
+            await self._high_watermarks(archive_channel_id)
+        )
 
         poster_checked, poster_missing, poster_examples = (
             await self._audit_posters(
                 archive=archive,
                 archive_channel_id=archive_channel_id,
+                high_watermark=poster_high_watermark,
             )
         )
         quality_checked, quality_missing, quality_examples = (
             await self._audit_qualities(
                 archive=archive,
                 archive_channel_id=archive_channel_id,
+                high_watermark=quality_high_watermark,
             )
         )
 
@@ -94,11 +99,37 @@ class ArchiveIntegrityAuditService:
             )
         return value
 
+    async def _high_watermarks(
+        self,
+        archive_channel_id: int,
+    ) -> tuple[int, int]:
+        async with self._database.session() as session:
+            poster_high_watermark = await session.scalar(
+                select(func.max(Movie.id)).where(
+                    Movie.archive_channel_id == archive_channel_id,
+                    Movie.status == "indexed",
+                )
+            )
+            quality_high_watermark = await session.scalar(
+                select(func.max(MovieQuality.id))
+                .join(Movie, Movie.id == MovieQuality.movie_id)
+                .where(
+                    Movie.archive_channel_id == archive_channel_id,
+                    Movie.status == "indexed",
+                )
+            )
+
+        return (
+            int(poster_high_watermark or 0),
+            int(quality_high_watermark or 0),
+        )
+
     async def _audit_posters(
         self,
         *,
         archive,
         archive_channel_id: int,
+        high_watermark: int,
     ) -> tuple[int, int, list[MissingArchiveReference]]:
         checked = 0
         missing = 0
@@ -117,6 +148,7 @@ class ArchiveIntegrityAuditService:
                             Movie.archive_channel_id == archive_channel_id,
                             Movie.status == "indexed",
                             Movie.id > after_id,
+                            Movie.id <= high_watermark,
                         )
                         .order_by(Movie.id)
                         .limit(self._batch_size)
@@ -154,6 +186,7 @@ class ArchiveIntegrityAuditService:
         *,
         archive,
         archive_channel_id: int,
+        high_watermark: int,
     ) -> tuple[int, int, list[MissingArchiveReference]]:
         checked = 0
         missing = 0
@@ -173,6 +206,7 @@ class ArchiveIntegrityAuditService:
                             Movie.archive_channel_id == archive_channel_id,
                             Movie.status == "indexed",
                             MovieQuality.id > after_id,
+                            MovieQuality.id <= high_watermark,
                         )
                         .order_by(MovieQuality.id)
                         .limit(self._batch_size)

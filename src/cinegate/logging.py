@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 _ADSGRAM_SECRET_PATH_RE = re.compile(
-    r"^/providers/adsgram/reward/[^/]+$"
+    r"^/providers/adsgram/reward/[^/]+(?:/.*)?$"
 )
 _SAFE_EXTRA_FIELDS = (
     "event",

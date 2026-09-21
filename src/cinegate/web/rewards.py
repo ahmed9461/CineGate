@@ -254,6 +254,10 @@ def _reward_page_html(
         if (response.status === 404 || response.status === 410) {{
           throw new Error("انتهت جلسة الإعلان. ارجع إلى البوت واطلب الجودة مجددًا.");
         }}
+        if (response.status === 429) {{
+          const retryAfter = response.headers.get("Retry-After") || "لحظات";
+          throw new Error("طلبات كثيرة، حاول مجددًا بعد " + retryAfter + " ثانية.");
+        }}
         if (data.status === "delivered") {{
           statusBox.textContent = "✅ تم التحقق وإرسال الفيلم إلى البوت.";
           setTimeout(() => tg.close(), 1200);

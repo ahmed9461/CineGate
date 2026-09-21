@@ -14,6 +14,18 @@ def test_adsgram_callback_secret_path_is_redacted() -> None:
     assert secret not in sanitized
 
 
+def test_adsgram_callback_secret_is_redacted_on_redirect_or_extra_path() -> None:
+    secret = "super_secret_callback_value_123456789"
+
+    for suffix in ("/", "/unexpected"):
+        sanitized = sanitized_request_path(
+            f"/providers/adsgram/reward/{secret}{suffix}"
+        )
+
+        assert sanitized == "/providers/adsgram/reward/[REDACTED]"
+        assert secret not in sanitized
+
+
 def test_normal_request_path_is_unchanged() -> None:
     assert sanitized_request_path("/telegram/webhook") == "/telegram/webhook"
 

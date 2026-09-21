@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
 
@@ -23,10 +24,27 @@ class FakeSession:
 class FakeDatabase:
     def __init__(self, *, fail: bool = False) -> None:
         self.fail = fail
+        self.disposed = False
 
     @asynccontextmanager
     async def session(self):
         yield FakeSession(fail=self.fail)
+
+    async def dispose(self) -> None:
+        self.disposed = True
+
+
+class FakeBotSession:
+    def __init__(self) -> None:
+        self.closed = False
+
+    async def close(self) -> None:
+        self.closed = True
+
+
+class FakeBot:
+    def __init__(self) -> None:
+        self.session = FakeBotSession()
 
 
 def runtime_for(*, db_fail: bool = False, worker=None) -> AppRuntime:
@@ -87,3 +105,29 @@ async def test_runtime_ready_when_database_and_worker_are_healthy() -> None:
 
     assert ready
     assert reason == "ready"
+
+
+@pytest.mark.asyncio
+async def test_runtime_close_releases_resources_after_worker_failure() -> None:
+    database = FakeDatabase()
+    bot = FakeBot()
+    worker = asyncio.get_running_loop().create_future()
+    worker.set_exception(RuntimeError("worker failed"))
+    runtime = AppRuntime(
+        settings=SimpleNamespace(),  # type: ignore[arg-type]
+        database=database,  # type: ignore[arg-type]
+        bot=bot,  # type: ignore[arg-type]
+        dispatcher=object(),  # type: ignore[arg-type]
+        rewards=object(),  # type: ignore[arg-type]
+        delivery=object(),  # type: ignore[arg-type]
+        deletion_worker=object(),  # type: ignore[arg-type]
+        abuse=AbuseProtection.defaults(),
+        worker_task=worker,
+    )
+
+    with pytest.raises(RuntimeError, match="worker failed"):
+        await runtime.close()
+
+    assert bot.session.closed
+    assert database.disposed
+    assert runtime.worker_task is None

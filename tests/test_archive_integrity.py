@@ -219,3 +219,45 @@ async def test_integrity_audit_treats_non_importable_telegram_result_as_missing(
     assert report.checked_qualities == 1
     assert report.missing_posters == 0
     assert report.missing_qualities == 1
+
+
+@pytest.mark.asyncio
+async def test_integrity_audit_uses_a_bounded_start_snapshot(
+    database: Database,
+) -> None:
+    async with database.session() as session, session.begin():
+        await SettingsRepository(session).set("archive_channel_id", ARCHIVE_ID)
+
+    await seed_movie(
+        database,
+        poster_message_id=500,
+        status="indexed",
+        qualities=((501, "720p"),),
+    )
+
+    class GrowingGateway(FakeGateway):
+        def __init__(self) -> None:
+            super().__init__(set())
+            self.added = False
+
+        async def get_messages_by_ids(self, entity, message_ids):
+            if not self.added:
+                self.added = True
+                await seed_movie(
+                    database,
+                    poster_message_id=600,
+                    status="indexed",
+                    qualities=((601, "720p"),),
+                )
+            return await super().get_messages_by_ids(entity, message_ids)
+
+    gateway = GrowingGateway()
+    report = await ArchiveIntegrityAuditService(
+        database=database,
+        gateway=gateway,  # type: ignore[arg-type]
+        batch_size=1,
+    ).verify()
+
+    assert report.checked_posters == 1
+    assert report.checked_qualities == 1
+    assert gateway.batches == [(500,), (501,)]

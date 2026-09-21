@@ -104,6 +104,15 @@ async def async_main(argv: list[str] | None = None) -> int:
     ) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
+    except Exception as exc:
+        # Operational client/library exceptions can embed request URLs or
+        # connection strings. Keep the CLI boundary useful without echoing
+        # exception payloads that may contain secrets.
+        print(
+            f"ERROR: operation failed ({type(exc).__name__})",
+            file=sys.stderr,
+        )
+        return 3
 
     return 0
 
@@ -115,8 +124,9 @@ def main() -> None:
 async def _webhook_command(args) -> int:
     settings = SecretsSettings()
     database = Database(settings.database_url.get_secret_value())
-    bot = Bot(token=settings.bot_token.get_secret_value())
+    bot: Bot | None = None
     try:
+        bot = Bot(token=settings.bot_token.get_secret_value())
         operations = WebhookOperations(
             database=database,
             bot=bot,
@@ -142,8 +152,11 @@ async def _webhook_command(args) -> int:
             print("Webhook deleted.")
             return 0
     finally:
-        await bot.session.close()
-        await database.dispose()
+        try:
+            if bot is not None:
+                await bot.session.close()
+        finally:
+            await database.dispose()
 
     return 0
 
@@ -156,13 +169,14 @@ async def _archive_verify(args) -> int:
     database = Database(
         database_settings.database_url.get_secret_value()
     )
-    gateway = HistoricalTelegramGateway(
-        settings=telegram_settings,
-        session_path=args.session,
-    )
 
+    gateway = None
     connected = False
     try:
+        gateway = HistoricalTelegramGateway(
+            settings=telegram_settings,
+            session_path=args.session,
+        )
         await gateway.connect_authorized()
         connected = True
         report = await ArchiveIntegrityAuditService(
@@ -173,9 +187,11 @@ async def _archive_verify(args) -> int:
         _print_archive_integrity(report)
         return 0 if report.ok else 3
     finally:
-        if connected:
-            await gateway.disconnect()
-        await database.dispose()
+        try:
+            if gateway is not None and connected:
+                await gateway.disconnect()
+        finally:
+            await database.dispose()
 
 
 def _print_webhook_status(result: WebhookStatus) -> None:

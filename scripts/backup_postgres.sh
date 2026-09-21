@@ -26,9 +26,27 @@ mkdir -p "${CINEGATE_BACKUP_DIR}"
 chmod 700 "${CINEGATE_BACKUP_DIR}"
 
 timestamp="$(date -u +'%Y%m%dT%H%M%SZ')"
-output="${CINEGATE_BACKUP_DIR}/cinegate-${timestamp}.dump"
+temporary="$(mktemp "${CINEGATE_BACKUP_DIR}/.cinegate-${timestamp}-XXXXXX")"
+token="${temporary##*-}"
+output="${CINEGATE_BACKUP_DIR}/cinegate-${timestamp}-${token}.dump"
 
-pg_dump   --host="${PGHOST}"   --port="${PGPORT}"   --username="${PGUSER}"   --dbname="${PGDATABASE}"   --format=custom   --compress=6   --no-owner   --no-privileges   --file="${output}"
+cleanup() {
+  rm -f -- "${temporary}"
+}
+trap cleanup EXIT HUP INT TERM
 
-chmod 600 "${output}"
+pg_dump \
+  --host="${PGHOST}" \
+  --port="${PGPORT}" \
+  --username="${PGUSER}" \
+  --dbname="${PGDATABASE}" \
+  --format=custom \
+  --compress=6 \
+  --no-owner \
+  --no-privileges \
+  --file="${temporary}"
+
+chmod 600 "${temporary}"
+mv -- "${temporary}" "${output}"
+trap - EXIT HUP INT TERM
 echo "${output}"

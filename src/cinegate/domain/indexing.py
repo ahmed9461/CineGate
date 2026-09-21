@@ -26,5 +26,11 @@ class ArchiveIndexResult:
     def should_notify_owner(self) -> bool:
         return (
             self.movie_id is not None
+            and self.action
+            in {
+                IndexAction.POSTER_UPSERTED,
+                IndexAction.QUALITY_UPSERTED,
+                IndexAction.DUPLICATE,
+            }
             and self.quality_count > self.owner_notification_quality_count
         )

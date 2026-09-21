@@ -38,6 +38,11 @@ class FailingGateway:
         self.disconnected = True
 
 
+class ExplodingGateway:
+    def __init__(self, *, settings, session_path: Path) -> None:
+        raise RuntimeError("constructor failed")
+
+
 @pytest.mark.asyncio
 async def test_archive_verify_disposes_database_when_userbot_connect_fails(
     monkeypatch: pytest.MonkeyPatch,
@@ -85,3 +90,48 @@ async def test_archive_verify_disposes_database_when_userbot_connect_fails(
     assert FakeDatabase.instances[0].disposed
     assert len(FailingGateway.instances) == 1
     assert not FailingGateway.instances[0].disconnected
+
+
+@pytest.mark.asyncio
+async def test_archive_verify_disposes_database_when_gateway_init_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from cinegate.importer import gateway as gateway_module
+
+    FakeDatabase.instances.clear()
+    monkeypatch.setattr(ops_cli, "Database", FakeDatabase)
+    monkeypatch.setattr(
+        ops_cli,
+        "ImporterDatabaseSettings",
+        lambda: SimpleNamespace(
+            database_url=SecretStr(
+                "postgresql+asyncpg://user:password@localhost/cinegate"
+            )
+        ),
+    )
+    monkeypatch.setattr(
+        ops_cli,
+        "ImporterTelegramSettings",
+        lambda: SimpleNamespace(
+            telegram_api_id=123456,
+            telegram_api_hash=SecretStr(
+                "0123456789abcdef0123456789abcdef"
+            ),
+        ),
+    )
+    monkeypatch.setattr(
+        gateway_module,
+        "HistoricalTelegramGateway",
+        ExplodingGateway,
+    )
+
+    args = SimpleNamespace(
+        session=Path("sessions/test"),
+        batch_size=100,
+    )
+
+    with pytest.raises(RuntimeError, match="constructor failed"):
+        await ops_cli._archive_verify(args)
+
+    assert len(FakeDatabase.instances) == 1
+    assert FakeDatabase.instances[0].disposed

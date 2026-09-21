@@ -1,24 +1,33 @@
+import stat
 from pathlib import Path
 
 
 def test_backup_script_uses_pgpassfile_and_restrictive_output() -> None:
-    script = Path("scripts/backup_postgres.sh").read_text(encoding="utf-8")
+    path = Path("scripts/backup_postgres.sh")
+    script = path.read_text(encoding="utf-8")
 
+    assert path.stat().st_mode & stat.S_IXUSR
     assert "PGPASSFILE" in script
     assert "PGPASSWORD" not in script
     assert "umask 077" in script
     assert "chmod 700" in script
     assert "chmod 600" in script
     assert "--format=custom" in script
+    assert "mktemp" in script
+    assert "trap cleanup" in script
+    assert 'mv -- "${temporary}" "${output}"' in script
 
 
 def test_restore_script_is_guarded_and_atomic() -> None:
-    script = Path("scripts/restore_postgres.sh").read_text(encoding="utf-8")
+    path = Path("scripts/restore_postgres.sh")
+    script = path.read_text(encoding="utf-8")
 
+    assert path.stat().st_mode & stat.S_IXUSR
     assert 'CINEGATE_ALLOW_RESTORE:-' in script
     assert 'CINEGATE_ALLOW_RESTORE=YES' in script
     assert "PGPASSFILE" in script
     assert "PGPASSWORD" not in script
+    assert "pg_restore --list" in script
     assert "--single-transaction" in script
     assert "--exit-on-error" in script
 

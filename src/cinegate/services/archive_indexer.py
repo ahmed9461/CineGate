@@ -169,12 +169,20 @@ class ArchiveIndexService:
         movie.raw_poster_caption = group.raw_poster_caption
         movie.parser_confidence = group.poster_confidence
 
-        count = await self._quality_count(session, movie.id)
-        movie.status = "indexed" if count else "orphan"
+        status = await self._refresh_movie_status(session, movie)
         return await self._result_for_movie(
             session=session,
             movie=movie,
-            action=IndexAction.POSTER_UPSERTED,
+            action=(
+                IndexAction.AMBIGUOUS
+                if status == "ambiguous"
+                else IndexAction.POSTER_UPSERTED
+            ),
+            diagnostic=(
+                "edited_poster_valid_but_quality_remains_invalid"
+                if status == "ambiguous"
+                else None
+            ),
         )
 
     async def _reconcile_quality_edit(
@@ -247,13 +255,21 @@ class ArchiveIndexService:
         quality_row.normalized_title = parsed.normalized_title
         quality_row.extracted_year = parsed.year
         quality_row.parser_confidence = parsed.confidence
-        movie.status = "indexed"
+        status = await self._refresh_movie_status(session, movie)
 
         return await self._result_for_movie(
             session=session,
             movie=movie,
-            action=IndexAction.QUALITY_UPSERTED,
-            diagnostic="edited_quality_reconciled",
+            action=(
+                IndexAction.AMBIGUOUS
+                if status == "ambiguous"
+                else IndexAction.QUALITY_UPSERTED
+            ),
+            diagnostic=(
+                "edited_quality_reconciled_but_movie_remains_ambiguous"
+                if status == "ambiguous"
+                else "edited_quality_reconciled"
+            ),
         )
 
     async def _invalidate_quality_edit(
@@ -415,12 +431,25 @@ class ArchiveIndexService:
         ).returning(MovieQuality.id)
 
         changed = (await session.execute(upsert)).scalar_one_or_none() is not None
-        movie.status = "indexed"
+        status = await self._refresh_movie_status(session, movie)
 
         return await self._result_for_movie(
             session=session,
             movie=movie,
-            action=IndexAction.QUALITY_UPSERTED if changed else IndexAction.DUPLICATE,
+            action=(
+                IndexAction.AMBIGUOUS
+                if status == "ambiguous"
+                else (
+                    IndexAction.QUALITY_UPSERTED
+                    if changed
+                    else IndexAction.DUPLICATE
+                )
+            ),
+            diagnostic=(
+                "quality_saved_but_movie_has_invalid_archive_metadata"
+                if status == "ambiguous"
+                else None
+            ),
         )
 
     async def _result_for_movie(
@@ -448,3 +477,27 @@ class ArchiveIndexService:
             select(func.count(MovieQuality.id)).where(MovieQuality.movie_id == movie_id)
         )
         return int(value or 0)
+
+    @staticmethod
+    async def _refresh_movie_status(
+        session: AsyncSession,
+        movie: Movie,
+    ) -> str:
+        total, invalid = (
+            await session.execute(
+                select(
+                    func.count(MovieQuality.id),
+                    func.count(MovieQuality.id).filter(
+                        MovieQuality.parser_confidence <= 0
+                    ),
+                ).where(MovieQuality.movie_id == movie.id)
+            )
+        ).one()
+
+        if movie.parser_confidence <= 0 or int(invalid or 0) > 0:
+            movie.status = "ambiguous"
+        elif int(total or 0) > 0:
+            movie.status = "indexed"
+        else:
+            movie.status = "orphan"
+        return movie.status
