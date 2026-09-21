@@ -60,3 +60,6 @@ jobs:
 
       - name: Compile
         run: python -m compileall -q src tests
+
+      - name: Shell scripts
+        run: bash -n scripts/*.sh
