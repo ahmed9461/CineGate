@@ -363,6 +363,45 @@ The importer detects/reports restricted forwarding and stops safely. It does not
 
 ---
 
+## D-033 — Historical import uses durable source→Archive mappings
+
+**Status:** Accepted  
+**Date:** 2026-09-21
+
+Historical migration correctness is based on durable PostgreSQL mapping rows between original source message IDs and Archive Channel message IDs.
+
+A source high-watermark freezes the historical snapshot. If Telegram forwards successfully and the importer crashes before the DB commit, the next run reconciles Archive forward metadata before sending anything new.
+
+**Reason:** Telegram forwarding and PostgreSQL commit are separate systems; exactly-once delivery cannot be assumed.
+
+---
+
+## D-034 — UserBot importer is operational tooling, not application runtime
+
+**Status:** Accepted  
+**Date:** 2026-09-21
+
+The Telethon UserBot is invoked only through the historical importer CLI and does not run inside the normal FastAPI/aiogram service.
+
+Its session/API hash remain operational secrets and are excluded from Git/logging.
+
+**Reason:** Keeps production service lighter and reduces exposure of the user-account session.
+
+---
+
+## D-035 — Historical notification suppression is mapping-aware
+
+**Status:** Accepted  
+**Date:** 2026-09-21
+
+Per-film owner notifications are suppressed while bulk import/reindex is actively running. In addition, any Archive message durably mapped as historical remains suppressed even if its webhook arrives after import completion.
+
+Normal new, unmapped Archive posts continue to notify the owner.
+
+**Reason:** Telegram webhook delivery may be delayed; job status alone is insufficient to distinguish late historical events.
+
+---
+
 # Pending decisions
 
 - Production AdsGram credentials/platform values
