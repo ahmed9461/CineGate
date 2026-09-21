@@ -503,3 +503,188 @@ async def test_concurrent_owner_notifiers_converge_to_latest_quality_count(
     assert bot.messages[row.owner_notification_message_id] == (
         "✅ تم حفظ منشورات جديدة\n\n1- Interstellar (2)"
     )
+
+
+
+@pytest.mark.asyncio
+async def test_edited_poster_updates_existing_movie_and_keeps_it_indexed(
+    database: Database,
+) -> None:
+    await set_setting(database, "archive_channel_id", ARCHIVE_CHANNEL_ID)
+    indexer = ArchiveIndexService(database)
+
+    await indexer.ingest(
+        channel_id=ARCHIVE_CHANNEL_ID,
+        message=modern_poster(100, title="Original Title", year=2024),
+    )
+    await indexer.ingest(
+        channel_id=ARCHIVE_CHANNEL_ID,
+        message=quality(
+            101,
+            title="Original Title",
+            year=2024,
+            resolution="720p",
+        ),
+    )
+
+    result = await indexer.reconcile_edit(
+        channel_id=ARCHIVE_CHANNEL_ID,
+        message=modern_poster(100, title="Corrected Title", year=2024),
+    )
+
+    async with database.session() as session:
+        movie = await session.scalar(select(Movie))
+
+    assert result.action is IndexAction.POSTER_UPSERTED
+    assert movie is not None
+    assert movie.display_title == "Corrected Title"
+    assert movie.normalized_title == "corrected title"
+    assert movie.status == "indexed"
+
+
+@pytest.mark.asyncio
+async def test_edited_quality_updates_same_archive_message_row(
+    database: Database,
+) -> None:
+    await set_setting(database, "archive_channel_id", ARCHIVE_CHANNEL_ID)
+    indexer = ArchiveIndexService(database)
+
+    await indexer.ingest(
+        channel_id=ARCHIVE_CHANNEL_ID,
+        message=modern_poster(100, title="Movie", year=2025),
+    )
+    await indexer.ingest(
+        channel_id=ARCHIVE_CHANNEL_ID,
+        message=quality(
+            101,
+            title="Movie",
+            year=2025,
+            resolution="720p",
+        ),
+    )
+
+    result = await indexer.reconcile_edit(
+        channel_id=ARCHIVE_CHANNEL_ID,
+        message=quality(
+            101,
+            title="Movie Corrected",
+            year=2025,
+            resolution="720p",
+        ),
+    )
+
+    async with database.session() as session:
+        row = await session.scalar(select(MovieQuality))
+        movie = await session.scalar(select(Movie))
+
+    assert result.action is IndexAction.QUALITY_UPSERTED
+    assert row is not None
+    assert row.archive_message_id == 101
+    assert row.normalized_title == "movie corrected"
+    assert movie is not None
+    assert movie.status == "indexed"
+
+
+@pytest.mark.asyncio
+async def test_invalid_quality_edit_marks_movie_ambiguous_and_hides_from_search(
+    database: Database,
+) -> None:
+    await set_setting(database, "archive_channel_id", ARCHIVE_CHANNEL_ID)
+    indexer = ArchiveIndexService(database)
+
+    await indexer.ingest(
+        channel_id=ARCHIVE_CHANNEL_ID,
+        message=modern_poster(100, title="Unsafe Edit", year=2025),
+    )
+    await indexer.ingest(
+        channel_id=ARCHIVE_CHANNEL_ID,
+        message=quality(
+            101,
+            title="Unsafe Edit",
+            year=2025,
+            resolution="720p",
+        ),
+    )
+
+    result = await indexer.reconcile_edit(
+        channel_id=ARCHIVE_CHANNEL_ID,
+        message=ArchiveMessage(
+            message_id=101,
+            media_kind=MediaKind.VIDEO,
+            caption="Unsafe Edit 2025",
+        ),
+    )
+
+    assert result.action is IndexAction.AMBIGUOUS
+
+    async with database.session() as session:
+        movie = await session.scalar(select(Movie))
+        row = await session.scalar(select(MovieQuality))
+
+    assert movie is not None
+    assert movie.status == "ambiguous"
+    assert row is not None
+    assert row.parser_confidence == 0
+    assert row.normalized_title is None
+
+    results = await MovieSearchService(database).search("Unsafe Edit")
+    assert results == ()
+
+
+@pytest.mark.asyncio
+async def test_quality_edit_conflicting_with_existing_resolution_is_safe(
+    database: Database,
+) -> None:
+    await set_setting(database, "archive_channel_id", ARCHIVE_CHANNEL_ID)
+    indexer = ArchiveIndexService(database)
+
+    await indexer.ingest(
+        channel_id=ARCHIVE_CHANNEL_ID,
+        message=modern_poster(100, title="Conflict Movie", year=2025),
+    )
+    await indexer.ingest(
+        channel_id=ARCHIVE_CHANNEL_ID,
+        message=quality(
+            101,
+            title="Conflict Movie",
+            year=2025,
+            resolution="720p",
+        ),
+    )
+    await indexer.ingest(
+        channel_id=ARCHIVE_CHANNEL_ID,
+        message=quality(
+            102,
+            title="Conflict Movie",
+            year=2025,
+            resolution="1080p",
+        ),
+    )
+
+    result = await indexer.reconcile_edit(
+        channel_id=ARCHIVE_CHANNEL_ID,
+        message=quality(
+            101,
+            title="Conflict Movie",
+            year=2025,
+            resolution="1080p",
+        ),
+    )
+
+    assert result.action is IndexAction.AMBIGUOUS
+    assert result.diagnostic == "edited_quality_conflicts_with_existing_quality"
+
+    async with database.session() as session:
+        movie = await session.scalar(select(Movie))
+        qualities = (
+            await session.execute(
+                select(MovieQuality).order_by(MovieQuality.archive_message_id)
+            )
+        ).scalars().all()
+
+    assert movie is not None
+    assert movie.status == "ambiguous"
+    assert [(row.archive_message_id, row.quality) for row in qualities] == [
+        (101, "720p"),
+        (102, "1080p"),
+    ]
