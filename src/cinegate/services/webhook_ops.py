@@ -77,7 +77,7 @@ class WebhookOperations:
             matches_expected=(
                 info.url == expected_url
                 and info.max_connections == _MAX_CONNECTIONS
-                and tuple(actual_updates) == _ALLOWED_UPDATES
+                and set(actual_updates) == set(_ALLOWED_UPDATES)
             ),
         )
 
