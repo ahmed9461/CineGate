@@ -1,15 +1,17 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import select
 
 from cinegate.db.models import Movie, MovieQuality
 from cinegate.db.session import Database
-from cinegate.importer.adapter import is_importable_message
 from cinegate.importer.errors import HistoricalImportError
-from cinegate.importer.gateway import HistoricalTelegramGateway
 from cinegate.repositories.settings import SettingsRepository
+
+if TYPE_CHECKING:
+    from cinegate.importer.gateway import HistoricalTelegramGateway
 
 
 @dataclass(frozen=True, slots=True)
@@ -132,7 +134,7 @@ class ArchiveIntegrityAuditService:
 
             for row, message in zip(rows, messages, strict=True):
                 checked += 1
-                if not is_importable_message(message):
+                if not _is_available_telegram_message(message):
                     missing += 1
                     if len(examples) < self._example_limit:
                         examples.append(
@@ -188,7 +190,7 @@ class ArchiveIntegrityAuditService:
 
             for row, message in zip(rows, messages, strict=True):
                 checked += 1
-                if not is_importable_message(message):
+                if not _is_available_telegram_message(message):
                     missing += 1
                     if len(examples) < self._example_limit:
                         examples.append(
@@ -209,3 +211,12 @@ def _require_same_length(rows, messages) -> None:
         raise HistoricalImportError(
             "Archive audit returned an unexpected Telegram result length"
         )
+
+
+
+def _is_available_telegram_message(message: Any) -> bool:
+    if message is None:
+        return False
+    if type(message).__name__ in {"MessageEmpty", "MessageService"}:
+        return False
+    return int(getattr(message, "id", 0) or 0) > 0
