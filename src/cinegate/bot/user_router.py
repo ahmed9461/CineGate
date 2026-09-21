@@ -65,9 +65,15 @@ def build_user_router(
         if abuse is not None:
             decision = abuse.search.check(message.from_user.id)
             if not decision.allowed:
-                await message.answer(
-                    _rate_limit_text(decision.retry_after)
-                )
+                if (
+                    abuse.notice is None
+                    or abuse.notice.check(
+                        ("search", message.from_user.id)
+                    ).allowed
+                ):
+                    await message.answer(
+                        _rate_limit_text(decision.retry_after)
+                    )
                 return
 
         try:
