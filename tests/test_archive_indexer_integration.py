@@ -22,6 +22,7 @@ from cinegate.domain.archive import ArchiveMessage, MediaKind
 from cinegate.domain.indexing import IndexAction
 from cinegate.repositories.settings import SettingsRepository
 from cinegate.services.archive_indexer import ArchiveIndexService
+from cinegate.services.movie_search import MovieSearchService
 from cinegate.services.owner_notifier import OwnerArchiveNotifier
 
 DATABASE_URL = os.getenv("CINEGATE_DATABASE_URL")
