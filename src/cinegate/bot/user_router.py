@@ -25,6 +25,7 @@ from cinegate.domain.rewards import ActiveRewardConflict, RewardQualityUnavailab
 from cinegate.domain.search import SearchQueryError
 from cinegate.repositories.settings import SettingsRepository
 from cinegate.services.movie_search import MovieSearchService
+from cinegate.services.rate_limit import AbuseProtection
 from cinegate.services.reward_sessions import RewardSessionService
 from cinegate.services.search_sessions import SearchSessionService
 from cinegate.services.templates import TemplateService
@@ -40,6 +41,7 @@ def build_user_router(
     sessions: SearchSessionService,
     rewards: RewardSessionService,
     templates: TemplateService | None = None,
+    abuse: AbuseProtection | None = None,
 ) -> Router:
     router = Router(name="users")
     templates = templates or TemplateService(database)
@@ -59,6 +61,14 @@ def build_user_router(
         raw_query = message.text.strip()
         if not raw_query:
             return
+
+        if abuse is not None:
+            decision = abuse.search.check(message.from_user.id)
+            if not decision.allowed:
+                await message.answer(
+                    _rate_limit_text(decision.retry_after)
+                )
+                return
 
         try:
             results = await search.search(raw_query)
@@ -119,6 +129,9 @@ def build_user_router(
         bot: Bot,
     ) -> None:
         user_id = callback.from_user.id
+        if not await _allow_callback(callback, abuse):
+            return
+
         view = await search.get_movie_view(callback_data.movie_id)
         if view is None:
             rendered = await templates.render("movie_unavailable")
@@ -203,6 +216,9 @@ def build_user_router(
         bot: Bot,
     ) -> None:
         user_id = callback.from_user.id
+        if not await _allow_callback(callback, abuse):
+            return
+
         current = await sessions.get_current(
             telegram_user_id=user_id,
             nonce=callback_data.nonce,
@@ -274,6 +290,9 @@ def build_user_router(
         bot: Bot,
     ) -> None:
         user_id = callback.from_user.id
+        if not await _allow_callback(callback, abuse):
+            return
+
         current = await sessions.get_current(
             telegram_user_id=user_id,
             nonce=callback_data.nonce,
@@ -387,6 +406,30 @@ def build_user_router(
             await _safe_delete(bot, user_id, sent.message_id)
 
     return router
+
+
+async def _allow_callback(
+    callback: CallbackQuery,
+    abuse: AbuseProtection | None,
+) -> bool:
+    if abuse is None:
+        return True
+
+    decision = abuse.callback.check(callback.from_user.id)
+    if decision.allowed:
+        return True
+
+    await _safe_callback_answer(
+        callback,
+        _rate_limit_text(decision.retry_after),
+        show_alert=False,
+    )
+    return False
+
+
+def _rate_limit_text(retry_after: float) -> str:
+    seconds = max(1, int(retry_after + 0.999))
+    return f"طلباتك سريعة جدًا، حاول بعد {seconds} ثانية."
 
 
 async def _reward_config(database: Database) -> tuple[str, str] | None:
