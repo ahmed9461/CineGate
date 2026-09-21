@@ -1,0 +1,31 @@
+[Unit]
+Description=CineGate Telegram Bot
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=cinegate
+Group=cinegate
+WorkingDirectory=/opt/cinegate
+EnvironmentFile=/etc/cinegate/cinegate.env
+
+ExecStartPre=/opt/cinegate/.venv/bin/alembic upgrade head
+ExecStart=/opt/cinegate/.venv/bin/uvicorn cinegate.main:app --host 127.0.0.1 --port 8010 --workers 1 --no-access-log
+
+Restart=always
+RestartSec=3
+TimeoutStopSec=30
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=full
+ProtectControlGroups=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+LockPersonality=true
+RestrictSUIDSGID=true
+
+[Install]
+WantedBy=multi-user.target
