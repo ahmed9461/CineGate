@@ -32,6 +32,17 @@ class FakeIndexer:
             owner_notification_quality_count=0,
         )
 
+    async def reconcile_edit(self, *, channel_id, message):
+        self.calls.append(("edit", channel_id, message))
+        return ArchiveIndexResult(
+            action=IndexAction.QUALITY_UPSERTED,
+            movie_id=123,
+            display_title="Imported Movie",
+            quality_count=1,
+            owner_notification_quality_count=0,
+            diagnostic="edited_quality_reconciled",
+        )
+
 
 class FakeNotifier:
     def __init__(self) -> None:
