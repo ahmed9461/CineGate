@@ -6,6 +6,7 @@ from sqlalchemy import select
 
 from cinegate.db.models import Movie, MovieQuality
 from cinegate.db.session import Database
+from cinegate.importer.adapter import is_importable_message
 from cinegate.importer.errors import HistoricalImportError
 from cinegate.importer.gateway import HistoricalTelegramGateway
 from cinegate.repositories.settings import SettingsRepository
@@ -131,7 +132,7 @@ class ArchiveIntegrityAuditService:
 
             for row, message in zip(rows, messages, strict=True):
                 checked += 1
-                if message is None:
+                if not is_importable_message(message):
                     missing += 1
                     if len(examples) < self._example_limit:
                         examples.append(
@@ -187,7 +188,7 @@ class ArchiveIntegrityAuditService:
 
             for row, message in zip(rows, messages, strict=True):
                 checked += 1
-                if message is None:
+                if not is_importable_message(message):
                     missing += 1
                     if len(examples) < self._example_limit:
                         examples.append(
