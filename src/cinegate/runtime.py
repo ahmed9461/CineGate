@@ -16,6 +16,7 @@ from cinegate.services.archive_indexer import ArchiveIndexService
 from cinegate.services.delivery import DeliveryService
 from cinegate.services.movie_search import MovieSearchService
 from cinegate.services.owner_notifier import OwnerArchiveNotifier
+from cinegate.services.rate_limit import AbuseProtection
 from cinegate.services.reward_sessions import RewardSessionService
 from cinegate.services.search_sessions import SearchSessionService
 from cinegate.services.templates import TemplateService
@@ -31,6 +32,7 @@ class AppRuntime:
     rewards: RewardSessionService
     delivery: DeliveryService
     deletion_worker: DeliveryDeletionWorker
+    abuse: AbuseProtection
     stop_event: asyncio.Event = field(default_factory=asyncio.Event)
     worker_task: asyncio.Task[None] | None = None
 
@@ -73,6 +75,7 @@ def build_runtime(settings: SecretsSettings | None = None) -> AppRuntime:
         delivery_service=delivery,
         bot=bot,
     )
+    abuse = AbuseProtection.defaults()
 
     dispatcher = Dispatcher()
     dispatcher.include_router(
@@ -97,6 +100,7 @@ def build_runtime(settings: SecretsSettings | None = None) -> AppRuntime:
             sessions=search_sessions,
             rewards=rewards,
             templates=templates,
+            abuse=abuse,
         )
     )
 
@@ -108,4 +112,5 @@ def build_runtime(settings: SecretsSettings | None = None) -> AppRuntime:
         rewards=rewards,
         delivery=delivery,
         deletion_worker=deletion_worker,
+        abuse=abuse,
     )
