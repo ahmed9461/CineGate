@@ -182,3 +182,40 @@ async def test_integrity_audit_is_ok_when_all_indexed_references_exist(
     assert report.ok
     assert report.missing_posters == 0
     assert report.missing_qualities == 0
+
+
+
+@pytest.mark.asyncio
+async def test_integrity_audit_treats_non_importable_telegram_result_as_missing(
+    database: Database,
+) -> None:
+    async with database.session() as session, session.begin():
+        await SettingsRepository(session).set("archive_channel_id", ARCHIVE_ID)
+
+    await seed_movie(
+        database,
+        poster_message_id=400,
+        status="indexed",
+        qualities=((401, "720p"),),
+    )
+
+    class EmptyResultGateway(FakeGateway):
+        async def get_messages_by_ids(self, entity, message_ids):
+            ids = tuple(int(value) for value in message_ids)
+            self.batches.append(ids)
+            return tuple(
+                SimpleNamespace(id=0)
+                if message_id == 401
+                else SimpleNamespace(id=message_id)
+                for message_id in ids
+            )
+
+    report = await ArchiveIntegrityAuditService(
+        database=database,
+        gateway=EmptyResultGateway(set()),  # type: ignore[arg-type]
+    ).verify()
+
+    assert report.checked_posters == 1
+    assert report.checked_qualities == 1
+    assert report.missing_posters == 0
+    assert report.missing_qualities == 1
