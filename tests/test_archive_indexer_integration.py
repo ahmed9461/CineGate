@@ -552,13 +552,13 @@ async def test_edited_quality_updates_same_archive_message_row(
 
     await indexer.ingest(
         channel_id=ARCHIVE_CHANNEL_ID,
-        message=modern_poster(100, title="Movie", year=2025),
+        message=modern_poster(100, title="Sample Feature", year=2025),
     )
     await indexer.ingest(
         channel_id=ARCHIVE_CHANNEL_ID,
         message=quality(
             101,
-            title="Movie",
+            title="Sample Feature",
             year=2025,
             resolution="720p",
         ),
@@ -568,7 +568,7 @@ async def test_edited_quality_updates_same_archive_message_row(
         channel_id=ARCHIVE_CHANNEL_ID,
         message=quality(
             101,
-            title="Movie Corrected",
+            title="Sample Feature Corrected",
             year=2025,
             resolution="720p",
         ),
@@ -581,7 +581,7 @@ async def test_edited_quality_updates_same_archive_message_row(
     assert result.action is IndexAction.QUALITY_UPSERTED
     assert row is not None
     assert row.archive_message_id == 101
-    assert row.normalized_title == "movie corrected"
+    assert row.normalized_title == "sample feature corrected"
     assert movie is not None
     assert movie.status == "indexed"
 
