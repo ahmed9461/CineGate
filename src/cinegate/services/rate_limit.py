@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import time
 from collections import OrderedDict, deque
+from collections.abc import Hashable
 from dataclasses import dataclass
-from typing import Hashable
 
 
 @dataclass(frozen=True, slots=True)
