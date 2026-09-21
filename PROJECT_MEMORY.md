@@ -1,6 +1,6 @@
 # CineGate Project Memory
 
-**Last updated:** 2026-09-20  
+**Last updated:** 2026-09-21  
 **Purpose:** Durable source of project context so work can resume without relying on chat history.
 
 ---
@@ -554,32 +554,88 @@ See `plans/0007-owner-control-center.md`.
 
 ---
 
-## 18. Historical import direction
+## 18. Implemented historical import
 
-The one-time historical importer will use **Telethon 1.45.x** as an importer-only optional dependency.
+Plan 0008 completed the one-time historical import/reindex subsystem.
 
-Confirmed direction:
+Implemented:
 
-- importer is a separate CLI process, not part of the long-running CineGate service
-- UserBot session material is secret and must stay outside Git
-- Telegram API ID/hash are importer secrets/bootstrap configuration
-- owner supplies the original source channel and Archive Channel
-- source content protection must be disabled by an authorized owner before migration
-- importer does **not** bypass or toggle Telegram content protection
-- messages move oldest → newest to preserve sequence grouping
-- forwarding remains Telegram-side; CineGate does not download/re-upload movie media
-- source→archive message mapping is persisted for resume/idempotency
-- crash reconciliation must detect already-forwarded source posts before retrying
-- import runs in bounded batches and handles FloodWait without uncontrolled retries
-- bulk import suppresses per-movie owner notification spam
-- imported Archive messages are reindexed sequentially through existing indexing behavior
-- normal future publishing remains owner→Archive Channel + webhook indexing
+- Telethon 1.45.x as an **optional importer-only dependency**
+- separate CLI process; no long-running UserBot daemon
+- commands:
+  - `auth`
+  - `run`
+  - `transfer`
+  - `reindex`
+  - `status`
+  - `verify`
+- isolated Telegram API/session configuration
+- owner-editable `source_channel_id`
+- migration `0010` with:
+  - `archive_import_jobs`
+  - `archive_import_message_map`
+- one durable Job per source/archive pair
+- source high-watermark snapshot
+- oldest→newest bounded forwarding
+- source→archive message mapping
+- crash reconciliation from Telegram forward metadata
+- PostgreSQL advisory lock per source/archive pair
+- bounded FloodWait handling
+- protection/permission preflight checks
+- sequential resumable reindex through `ArchiveIndexService`
+- full replay idempotency
+- missing/mismatched mapping verification
+- owner progress via one rate-limited Telegram message
+- CLI progress throttling
+- bulk owner-notification suppression
+- durable late historical-message suppression after import completion
+- owner status/diagnostics for latest import
+- stale suppression heartbeat expiry
+- no `download_media` path anywhere in the repository
 
-Full implementation belongs to Plan 0008.
+Security/operational rules:
+
+- UserBot session/API hash/login code/2FA remain secret
+- source protection is never bypassed
+- Archive Channel protection must also be disabled for later Bot API delivery
+- authorized owner must temporarily disable source forwarding protection before live migration
+- progress/reporting failure never stops the transfer itself
+- live Telegram migration requires real owner credentials/channel access and is intentionally not performed in CI
+
+Latest Plan 0008 verification:
+
+- Ruff passed
+- **230 tests passed**
+- PostgreSQL migrations `0001 → 0010` passed
+- full downgrade to base and restore to head passed
+- compileall passed
+- optional Telethon importer dependency installed in CI
+
+See `plans/0008-historical-archive-import-and-reindex.md`.
 
 ---
 
-## 19. Pending decisions / information
+## 19. Launch hardening direction
+
+The next phase is launch hardening and deployment.
+
+Primary targets:
+
+- application-level abuse/rate limiting
+- structured/redacted logging
+- health/readiness
+- webhook registration/verification tooling
+- backup/restore
+- deployment/runbook
+- real-time Archive edit/delete reconciliation
+- production-safe access-log handling
+- monitoring/operational diagnostics
+- controlled live Telegram validation
+- rapid-click/load/restart validation
+
+---
+
+## 20. Pending decisions / information
 
 Do not guess these:
 
