@@ -26,6 +26,7 @@ from cinegate.db.models import (
 )
 from cinegate.db.session import Database
 from cinegate.services.movie_search import MovieSearchService
+from cinegate.services.rate_limit import AbuseProtection, SlidingWindowLimiter
 from cinegate.services.reward_sessions import RewardSessionService
 from cinegate.services.search_sessions import SearchSessionService
 
@@ -553,3 +554,86 @@ async def test_active_reward_prevents_switching_quality_silently(
     text, show_alert = conflict_callback.answers[-1]
     assert show_alert is True
     assert "720p" in (text or "")
+
+
+
+def strict_abuse_protection() -> AbuseProtection:
+    return AbuseProtection(
+        search=SlidingWindowLimiter(
+            limit=1,
+            window_seconds=60,
+            max_keys=100,
+        ),
+        callback=SlidingWindowLimiter(
+            limit=1,
+            window_seconds=60,
+            max_keys=100,
+        ),
+        reward_claim=SlidingWindowLimiter(
+            limit=1,
+            window_seconds=60,
+            max_keys=100,
+        ),
+    )
+
+
+@pytest.mark.asyncio
+async def test_rapid_search_is_rate_limited_before_second_search(
+    database: Database,
+) -> None:
+    await seed_movie(database)
+    abuse = strict_abuse_protection()
+    router = build_user_router(
+        database=database,
+        search=MovieSearchService(database),
+        sessions=SearchSessionService(database),
+        rewards=RewardSessionService(database),
+        abuse=abuse,
+    )
+    bot = FakeBot()
+    search_handler = handler(router, "message", "direct_movie_search")
+
+    first = FakeIncomingMessage("Interstellar")
+    second = FakeIncomingMessage("Interstellar")
+
+    await search_handler(first, bot=bot)
+    await search_handler(second, bot=bot)
+
+    assert "وجدنا 1 نتائج بحث" in first.answers[0].text
+    assert len(second.answers) == 1
+    assert "طلباتك سريعة جدًا" in second.answers[0].text
+
+
+@pytest.mark.asyncio
+async def test_rapid_user_callback_is_rate_limited_before_state_machine(
+    database: Database,
+) -> None:
+    movie_id = await seed_movie(database)
+    abuse = strict_abuse_protection()
+    sessions = SearchSessionService(database)
+    search = MovieSearchService(database)
+    router = build_user_router(
+        database=database,
+        search=search,
+        sessions=sessions,
+        rewards=RewardSessionService(database),
+        abuse=abuse,
+    )
+    bot = FakeBot()
+
+    incoming = FakeIncomingMessage("Interstellar")
+    await handler(router, "message", "direct_movie_search")(incoming, bot=bot)
+    button = incoming.answers[0].reply_markup.inline_keyboard[0][0]
+    callback_data = MovieSelectCallback.unpack(button.callback_data)
+    assert callback_data.movie_id == movie_id
+
+    callback_handler = handler(router, "callback_query", "select_movie")
+    first = FakeCallback()
+    second = FakeCallback()
+
+    await callback_handler(first, callback_data=callback_data, bot=bot)
+    await callback_handler(second, callback_data=callback_data, bot=bot)
+
+    assert len(bot.copied) == 1
+    assert second.answers
+    assert "طلباتك سريعة جدًا" in (second.answers[-1][0] or "")
