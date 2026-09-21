@@ -26,6 +26,7 @@ from cinegate.db.models import (
 )
 from cinegate.db.session import Database
 from cinegate.domain.delivery import DeliveryResult
+from cinegate.services.rate_limit import AbuseProtection, SlidingWindowLimiter
 from cinegate.services.reward_sessions import RewardSessionService
 from cinegate.web.app import create_app
 
@@ -411,3 +412,63 @@ async def test_delivered_reward_page_does_not_offer_another_ad(setup) -> None:
     assert 'const rewardStatus = "delivered"' in response.text
     assert 'button.hidden = true' in response.text
     assert "تم إرسال الفيلم بالفعل" in response.text
+
+
+
+def one_claim_abuse_protection() -> AbuseProtection:
+    return AbuseProtection(
+        search=SlidingWindowLimiter(limit=10, window_seconds=10),
+        callback=SlidingWindowLimiter(limit=10, window_seconds=10),
+        reward_claim=SlidingWindowLimiter(
+            limit=1,
+            window_seconds=30,
+            max_keys=100,
+        ),
+    )
+
+
+@pytest.mark.asyncio
+async def test_reward_claim_rate_limit_returns_429_and_retry_after(setup) -> None:
+    _database, runtime, reward, client = setup
+    runtime.abuse = one_claim_abuse_protection()
+
+    first = await client.post(
+        f"/api/rewards/{reward.id}/claim",
+        json={"init_data": signed_init_data()},
+    )
+    second = await client.post(
+        f"/api/rewards/{reward.id}/claim",
+        json={"init_data": signed_init_data()},
+    )
+
+    assert first.status_code == 202
+    assert second.status_code == 429
+    assert int(second.headers["Retry-After"]) >= 1
+    assert second.json()["detail"] == "too many reward claim requests"
+
+
+@pytest.mark.asyncio
+async def test_provider_callback_is_not_blocked_by_user_rate_limit(setup) -> None:
+    _database, runtime, reward, client = setup
+    runtime.abuse = one_claim_abuse_protection()
+
+    claim = await client.post(
+        f"/api/rewards/{reward.id}/claim",
+        json={"init_data": signed_init_data()},
+    )
+    assert claim.status_code == 202
+
+    # Exhaust the user/session claim limiter.
+    blocked = await client.post(
+        f"/api/rewards/{reward.id}/claim",
+        json={"init_data": signed_init_data()},
+    )
+    assert blocked.status_code == 429
+
+    provider = await client.get(
+        f"/providers/adsgram/reward/{CALLBACK_SECRET}",
+        params={"userid": USER_ID},
+    )
+
+    assert provider.status_code == 204
+    assert runtime.delivery.calls == [reward.id]
