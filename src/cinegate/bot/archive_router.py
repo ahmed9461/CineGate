@@ -60,4 +60,17 @@ def build_archive_router(
                 exc_info=True,
             )
 
+    @router.edited_channel_post()
+    async def archive_channel_post_edited(message: Message) -> None:
+        result = await indexer.reconcile_edit(
+            channel_id=message.chat.id,
+            message=telegram_message_to_archive(message),
+        )
+        if result.action.value == "ambiguous":
+            logger.warning(
+                "Edited Archive post became ambiguous movie_id=%s diagnostic=%s",
+                result.movie_id,
+                result.diagnostic,
+            )
+
     return router
