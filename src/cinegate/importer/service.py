@@ -255,6 +255,9 @@ class HistoricalImportService:
                         mapping.archive_message_id
                         for mapping in mappings
                     ]
+                    snapshot_versions = await self._indexer.snapshot_versions(
+                        job.archive_channel_id, archive_ids,
+                    )
                     messages = await self._gateway.get_messages_by_ids(
                         archive,
                         archive_ids,
@@ -272,9 +275,10 @@ class HistoricalImportService:
                                 missing=True,
                             )
                         else:
-                            await self._indexer.ingest(
+                            await self._indexer.reconcile_edit(
                                 channel_id=job.archive_channel_id,
                                 message=telethon_message_to_archive(message),
+                                expected_snapshot_version=snapshot_versions[mapping.archive_message_id],
                             )
                             await self._mark_reindexed(
                                 job_id=job.id,

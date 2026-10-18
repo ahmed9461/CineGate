@@ -50,6 +50,9 @@ jobs:
       - name: Apply migrations
         run: alembic upgrade head
 
+      - name: JavaScript regression runtime
+        run: node --version
+
       - name: Tests
         run: pytest -q
 

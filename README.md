@@ -170,3 +170,7 @@ After meaningful work, update the active plan, project memory, project status, p
 ## Principle
 
 **Do not rely on chat history as the only source of truth. The repository must always contain enough context to resume CineGate safely from the last checkpoint.**
+
+## Local Plan 0011 repairs
+
+The local reward/Archive repair patch is documented in `docs/PLAN0011_REPAIR_NOTES.md` and `plans/0011-reward-and-archive-audit-fixes.md`. It adds retained unavailable rewards and durable Archive stream/edit evidence. Read the migration downgrade restrictions before applying it. Local verification has 321 passing tests; this is distinct from the historical remote CI result above. Node.js is required for the executable Mini App regression (explicitly skipped if unavailable).

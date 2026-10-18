@@ -22,7 +22,6 @@ from cinegate.db.models import (
     UserSearchSession,
 )
 from cinegate.db.session import Database
-from cinegate.domain.delivery import RewardNotReady
 from cinegate.presentation.templates import serialize_entities
 from cinegate.services.delivery import DeliveryService
 from cinegate.services.reward_sessions import RewardSessionService
@@ -334,14 +333,14 @@ async def test_ambiguous_movie_blocks_delivery_without_losing_reward(setup) -> N
         assert movie is not None
         movie.status = "ambiguous"
 
-    with pytest.raises(RewardNotReady, match="not currently safe"):
-        await delivery.deliver(reward.id)
+    result = await delivery.deliver(reward.id)
+    assert result.status == "unavailable"
 
     async with database.session() as session:
         reward_row = await session.get(RewardSession, reward.id)
 
     assert reward_row is not None
-    assert reward_row.status == "rewarded"
+    assert reward_row.status == "unavailable"
     assert bot.copies == []
 
 
@@ -354,14 +353,14 @@ async def test_archive_quality_change_cannot_change_exact_reward_binding(setup) 
         assert quality is not None
         quality.quality = "1080p"
 
-    with pytest.raises(RewardNotReady, match="binding no longer matches"):
-        await delivery.deliver(reward.id)
+    result = await delivery.deliver(reward.id)
+    assert result.status == "unavailable"
 
     async with database.session() as session:
         reward_row = await session.get(RewardSession, reward.id)
 
     assert reward_row is not None
-    assert reward_row.status == "rewarded"
+    assert reward_row.status == "unavailable"
     assert bot.copies == []
 
 
@@ -374,7 +373,7 @@ async def test_invalidated_quality_confidence_blocks_delivery(setup) -> None:
         assert quality is not None
         quality.parser_confidence = 0
 
-    with pytest.raises(RewardNotReady, match="not currently safe"):
-        await delivery.deliver(reward.id)
+    result = await delivery.deliver(reward.id)
+    assert result.status == "unavailable"
 
     assert bot.copies == []

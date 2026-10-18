@@ -80,6 +80,8 @@ def fake_channel_post(message_id: int):
         video=object(),
         document=None,
         caption="Imported Movie 2025 #720p",
+        text=None,
+        edit_date=None,
     )
 
 

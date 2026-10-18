@@ -217,3 +217,9 @@ Must handle safely:
 - durable global webhook sequencing before webhook concurrency is increased
 
 These must be decided through task plans and recorded in the decision log.
+
+## Plan 0011 reliability corrections
+
+Earned requests whose original quality becomes unavailable are retained without blocking the user's next ad request. The original proof and movie/quality-row/resolution binding are preserved; a safe restoration can resume without another ad. An explicit unavailable response explains that the request is saved. Other movies/resolutions are never silently substituted.
+
+Archive indexing preserves ordered message evidence including boundaries/noise. Initial duplicate messages cannot replace reconciled edits. Poster changes revalidate attached qualities, and full historical reindex reconciles existing message IDs. Existing pre-migration history may require separately authorized validation; the migration cannot recreate ignored old events.

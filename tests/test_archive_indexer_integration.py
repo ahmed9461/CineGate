@@ -8,6 +8,7 @@ import pytest
 import pytest_asyncio
 from sqlalchemy import delete, func, select
 
+from cinegate.db.archive_models import ArchiveMessageSnapshot
 from cinegate.db.models import (
     AppSetting,
     Delivery,
@@ -36,6 +37,7 @@ async def clean_database(database: Database) -> None:
         await session.execute(delete(UserSearchSession))
         await session.execute(delete(MovieQuality))
         await session.execute(delete(Movie))
+        await session.execute(delete(ArchiveMessageSnapshot))
         await session.execute(delete(AppSetting))
         await session.execute(delete(MessageTemplate))
 

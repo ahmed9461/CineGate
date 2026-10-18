@@ -107,7 +107,8 @@ class AdminDiagnosticsService:
                 await session.execute(
                     select(
                         func.count().filter(
-                            RewardSession.status.in_(_ACTIVE_REWARD_STATUSES)
+                            RewardSession.status.in_(_ACTIVE_REWARD_STATUSES),
+                            RewardSession.unavailable_at.is_(None),
                         ),
                         func.count().filter(RewardSession.status == "rewarded"),
                     )

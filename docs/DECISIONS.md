@@ -461,3 +461,25 @@ Webhook delivery remains `max_connections=1`. Backups are published atomically i
 - External monitoring/alert destination
 - Telegram Bot API/client feature versions for future presentation work
 - Durable global webhook sequencer before raising `max_connections` above 1
+
+---
+
+## D-040 — Unavailable earned requests retain entitlement without blocking new ads
+
+**Status:** Implemented locally in Plan 0011 (unpublished)
+**Date:** 2026-10-15
+
+An earned reward whose original movie/quality-row/resolution is no longer safely deliverable must retain both proof timestamps and its original binding. It enters a durable unavailable state and releases the one-active-ad restriction. The owner is not required to delete earned credit to unblock a user.
+
+When that exact existing binding becomes safe again, its original reward can resume without another ad, including while a separate ad session is active. A persistent unavailability marker keeps these retained requests out of user-only provider callback selection and the active-ad unique index, including during retry/recovery. Same-row replacement of a duplicate quality retains the existing binding contract; this does not create a new immutable file/title snapshot guarantee.
+
+Do not silently substitute another movie/resolution or expire/delete earned credit. A schema downgrade that cannot represent retained entitlements must stop with a clear error instead of discarding them.
+
+## D-041 — Archive reconciliation retains ordered current message evidence
+
+**Status:** Implemented locally in Plan 0011 (unpublished)
+**Date:** 2026-10-15
+
+Live indexing must preserve the real intervening Archive stream, including noise/boundary messages, rather than pretending every quality immediately follows its poster. Durable current message snapshots are keyed by Archive channel and message ID. Duplicate initial events cannot overwrite newer reconciled evidence; explicit edits/current-history replay update it. Parsing remains sequence-first with existing title/language tolerance.
+
+Poster edits revalidate associated qualities, preserving quality-row identity. Full historical reindex reconciles existing Archive IDs so a resolution change cannot become a second conflicting row. Snapshot migration seeds only metadata already known to the database; it cannot reconstruct previously discarded history or prove that every old association was safe. No live production catalog repair is implied by installing the migration. Timestamp ordering remains subject to existing single-process/webhook sequencing limits.

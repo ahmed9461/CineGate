@@ -1,12 +1,81 @@
 import os
+import shutil
 import stat
 import subprocess
 from pathlib import Path
 
+import pytest
+
+
+def _bash() -> str:
+    # Prefer Git Bash to Windows' optional WSL launcher.
+    if os.name == "nt":
+        git = shutil.which("git")
+        if git:
+            candidate = Path(git).resolve().parents[1] / "bin" / "bash.exe"
+            if candidate.is_file():
+                return str(candidate)
+    bash = shutil.which("bash")
+    assert bash is not None, "Bash is required to exercise the operational shell scripts"
+    return bash
+
+
+def _bash_path(path: Path) -> str:
+    if os.name != "nt":
+        return str(path.resolve())
+    return subprocess.check_output(
+        [_bash(), "-c", 'cygpath -u "$1"', "--", str(path.resolve())],
+        text=True, encoding="utf-8",
+    ).strip()
+
+
+def _chmod(path: Path, mode: int) -> None:
+    if os.name == "nt":
+        subprocess.run(
+            [_bash(), "-c", 'chmod "$1" "$2"', "--", f"{mode:o}", _bash_path(path)],
+            check=True, capture_output=True, text=True, encoding="utf-8",
+        )
+    else:
+        path.chmod(mode)
+
+
+def _mode(path: Path) -> int:
+    if os.name != "nt":
+        return stat.S_IMODE(path.stat().st_mode)
+    # Use the script's actual permission view, never fabricate POSIX modes on NTFS.
+    return int(subprocess.check_output(
+        [_bash(), "-c", 'stat -c "%a" "$1"', "--", _bash_path(path)],
+        text=True, encoding="utf-8",
+    ).strip(), 8)
+
+
+def _assert_executable(path: Path) -> None:
+    if os.name != "nt":
+        assert path.stat().st_mode & stat.S_IXUSR
+        return
+    # Native Windows stat has no executable bit; enforce Git's distributed mode.
+    records = subprocess.check_output(
+        ["git", "ls-files", "--stage", "--error-unmatch", "--", path.as_posix()],
+        text=True, encoding="utf-8",
+    ).splitlines()
+    assert len(records) == 1 and records[0].split()[0] == "100755"
+
+
+def _run_script(path: Path, env: dict[str, str]) -> subprocess.CompletedProcess[str]:
+    shell_env = env.copy()
+    if os.name == "nt":
+        for key in ("PGPASSFILE", "CINEGATE_BACKUP_DIR", "CINEGATE_RESTORE_FILE", "FAKE_LOG"):
+            if key in shell_env:
+                shell_env[key] = _bash_path(Path(shell_env[key]))
+    return subprocess.run(
+        [_bash(), _bash_path(path)], check=False, capture_output=True,
+        text=True, encoding="utf-8", env=shell_env,
+    )
+
 
 def _write_executable(path: Path, body: str) -> None:
-    path.write_text(body, encoding="utf-8")
-    path.chmod(0o755)
+    path.write_text(body, encoding="utf-8", newline="\n")
+    _chmod(path, 0o755)
 
 
 def _postgres_env(
@@ -19,12 +88,12 @@ def _postgres_env(
         "127.0.0.1:5432:cinegate:cinegate:test-password\n",
         encoding="utf-8",
     )
-    passfile.chmod(0o600)
+    _chmod(passfile, 0o600)
 
     env = os.environ.copy()
     env.update(
         {
-            "PATH": f"{fake_bin}:{env['PATH']}",
+            "PATH": f"{fake_bin}{os.pathsep}{env['PATH']}",
             "PGHOST": "127.0.0.1",
             "PGPORT": "5432",
             "PGDATABASE": "cinegate",
@@ -39,7 +108,7 @@ def test_backup_script_uses_pgpassfile_and_restrictive_output() -> None:
     path = Path("scripts/backup_postgres.sh")
     script = path.read_text(encoding="utf-8")
 
-    assert path.stat().st_mode & stat.S_IXUSR
+    _assert_executable(path)
     assert "PGPASSFILE" in script
     assert "PGPASSWORD" not in script
     assert "umask 077" in script
@@ -55,7 +124,7 @@ def test_restore_script_is_guarded_and_atomic() -> None:
     path = Path("scripts/restore_postgres.sh")
     script = path.read_text(encoding="utf-8")
 
-    assert path.stat().st_mode & stat.S_IXUSR
+    _assert_executable(path)
     assert 'CINEGATE_ALLOW_RESTORE:-' in script
     assert 'CINEGATE_ALLOW_RESTORE=YES' in script
     assert "PGPASSFILE" in script
@@ -85,22 +154,22 @@ printf 'complete-backup' > "${output}"
     env = _postgres_env(tmp_path=tmp_path, fake_bin=fake_bin)
     env["CINEGATE_BACKUP_DIR"] = str(backup_dir)
 
-    completed = subprocess.run(
-        [str(Path("scripts/backup_postgres.sh").resolve())],
-        check=False,
-        capture_output=True,
-        text=True,
-        env=env,
-    )
+    completed = _run_script(Path("scripts/backup_postgres.sh"), env)
 
     assert completed.returncode == 0, completed.stderr
-    output = Path(completed.stdout.strip())
+    output_text = completed.stdout.strip()
+    if os.name == "nt":
+        output_text = subprocess.check_output(
+            [_bash(), "-c", 'cygpath -w "$1"', "--", output_text],
+            text=True, encoding="utf-8",
+        ).strip()
+    output = Path(output_text)
     assert output.parent == backup_dir
     assert output.name.startswith("cinegate-")
     assert output.suffix == ".dump"
     assert output.read_text(encoding="utf-8") == "complete-backup"
-    assert stat.S_IMODE(output.stat().st_mode) == 0o600
-    assert stat.S_IMODE(backup_dir.stat().st_mode) == 0o700
+    assert _mode(output) == 0o600
+    assert _mode(backup_dir) == 0o700
     assert not tuple(backup_dir.glob(".cinegate-*"))
 
 
@@ -125,13 +194,7 @@ exit 7
     env = _postgres_env(tmp_path=tmp_path, fake_bin=fake_bin)
     env["CINEGATE_BACKUP_DIR"] = str(backup_dir)
 
-    completed = subprocess.run(
-        [str(Path("scripts/backup_postgres.sh").resolve())],
-        check=False,
-        capture_output=True,
-        text=True,
-        env=env,
-    )
+    completed = _run_script(Path("scripts/backup_postgres.sh"), env)
 
     assert completed.returncode == 7
     assert tuple(backup_dir.iterdir()) == ()
@@ -153,7 +216,7 @@ printf '%s\\n' "$@" >> "${FAKE_LOG}"
     )
     restore_file = tmp_path / "backup.dump"
     restore_file.write_text("fake-custom-archive", encoding="utf-8")
-    restore_file.chmod(0o600)
+    _chmod(restore_file, 0o600)
     env = _postgres_env(tmp_path=tmp_path, fake_bin=fake_bin)
     env.update(
         {
@@ -163,13 +226,7 @@ printf '%s\\n' "$@" >> "${FAKE_LOG}"
         }
     )
 
-    completed = subprocess.run(
-        [str(Path("scripts/restore_postgres.sh").resolve())],
-        check=False,
-        capture_output=True,
-        text=True,
-        env=env,
-    )
+    completed = _run_script(Path("scripts/restore_postgres.sh"), env)
 
     assert completed.returncode == 0, completed.stderr
     calls = log_path.read_text(encoding="utf-8")
@@ -201,3 +258,32 @@ def test_launch_runbook_keeps_webhook_concurrency_at_one() -> None:
     assert "max_connections=1" in deployment
     assert "max_connections=1" in checklist
     assert "raw Uvicorn access log disabled" in checklist
+
+
+@pytest.mark.parametrize("script_name", ["backup_postgres.sh", "restore_postgres.sh"])
+def test_scripts_reject_readable_passfile(tmp_path: Path, script_name: str) -> None:
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    invoked = tmp_path / "postgres-was-invoked"
+    for command in ("pg_dump", "pg_restore"):
+        _write_executable(
+            fake_bin / command,
+            '#!/usr/bin/env bash\nset -eu\nprintf invoked > "${FAKE_LOG}"\n',
+        )
+    env = _postgres_env(tmp_path=tmp_path, fake_bin=fake_bin)
+    passfile = Path(env["PGPASSFILE"])
+    _chmod(passfile, 0o644)
+    assert _mode(passfile) == 0o644
+    restore_file = tmp_path / "backup.dump"
+    restore_file.write_text("fake-custom-archive", encoding="utf-8")
+    env.update({
+        "CINEGATE_BACKUP_DIR": str(tmp_path / "backups"),
+        "CINEGATE_RESTORE_FILE": str(restore_file),
+        "CINEGATE_ALLOW_RESTORE": "YES",
+        "FAKE_LOG": str(invoked),
+    })
+    completed = _run_script(Path("scripts") / script_name, env)
+    assert completed.returncode == 2, completed.stderr
+    assert "PGPASSFILE must have mode 600" in completed.stderr
+    assert not invoked.exists()
+    assert not (tmp_path / "backups").exists()

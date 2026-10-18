@@ -7,6 +7,7 @@ import pytest
 import pytest_asyncio
 from sqlalchemy import delete, func, select
 
+from cinegate.db.archive_models import ArchiveMessageSnapshot
 from cinegate.db.models import (
     AppSetting,
     ArchiveImportJob,
@@ -66,6 +67,7 @@ async def clean(database: Database) -> None:
         await session.execute(delete(ArchiveImportJob))
         await session.execute(delete(MovieQuality))
         await session.execute(delete(Movie))
+        await session.execute(delete(ArchiveMessageSnapshot))
         await session.execute(delete(AppSetting))
 
 
@@ -434,3 +436,72 @@ async def test_paused_reindex_can_resume_after_transfer_completed(
 
     assert completed.status == "completed"
     assert completed.last_reindexed_source_message_id == 3
+
+
+@pytest.mark.asyncio
+async def test_full_reindex_reconciles_resolution_and_caption_at_same_message_id(database):
+    job_id = await seed_job_and_mappings(database)
+    gateway = ReindexGateway({
+        101: archive_message(101, photo=True,
+                             text="الفيلم: Reindex Repair\nالسنة: 2025\nالقصة: قصة"),
+        102: archive_message(102, video=True, text="Reindex Repair 2025 #720p"),
+        103: archive_message(103, text="ordinary noise"),
+    })
+    service = HistoricalImportService(database=database, gateway=gateway)
+    await service.reindex(job_id=job_id, full=False)
+    async with database.session() as session:
+        original = await session.scalar(select(MovieQuality))
+        original_id = original.id
+    gateway.messages[102] = archive_message(
+        102, video=True, text="Reindex Repair Corrected 2025 #1080p")
+    completed = await service.reindex(job_id=job_id, full=True)
+    assert completed.status == "completed"
+    assert completed.reindexed_messages == 3
+    async with database.session() as session:
+        repaired = await session.scalar(select(MovieQuality))
+        assert repaired.id == original_id
+        assert repaired.quality == "1080p"
+        assert repaired.extracted_title == "Reindex Repair Corrected"
+    gateway.messages[102] = archive_message(
+        102, video=True, text="Reindex Repair Another Correction 2025 #1080p")
+    await service.reindex(job_id=job_id, full=True)
+    async with database.session() as session:
+        repaired = await session.scalar(select(MovieQuality))
+        assert repaired.id == original_id
+        assert repaired.extracted_title == "Reindex Repair Another Correction"
+
+
+@pytest.mark.asyncio
+async def test_full_reindex_does_not_overwrite_live_edit_during_history_fetch(database):
+    from datetime import UTC, datetime
+
+    from cinegate.domain.archive import ArchiveMessage, MediaKind
+
+    job_id = await seed_job_and_mappings(database)
+    gateway = ReindexGateway({
+        101: archive_message(101, photo=True,
+                             text="الفيلم: Reindex Race\nالسنة: 2025\nالقصة: قصة"),
+        102: archive_message(102, video=True, text="Reindex Race 2025 #720p"),
+        103: archive_message(103, text="ordinary noise"),
+    })
+    service = HistoricalImportService(database=database, gateway=gateway)
+    await service.reindex(job_id=job_id, full=False)
+    read_history = gateway.get_messages_by_ids
+
+    async def read_then_live_edit(entity, message_ids):
+        fetched = await read_history(entity, message_ids)
+        await ArchiveIndexService(database).reconcile_edit(
+            channel_id=ARCHIVE_ID,
+            message=ArchiveMessage(101, MediaKind.PHOTO, "removed",
+                                   edited_at=datetime(2026, 10, 15, tzinfo=UTC)),
+        )
+        return fetched
+
+    gateway.get_messages_by_ids = read_then_live_edit
+    completed = await service.reindex(job_id=job_id, full=True)
+    assert completed.status == "completed"
+    assert completed.missing_archive_messages == 0
+    async with database.session() as session:
+        movie = await session.scalar(select(Movie))
+        assert movie.status == "ambiguous"
+        assert movie.raw_poster_caption == "removed"

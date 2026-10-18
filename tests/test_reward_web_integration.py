@@ -472,3 +472,38 @@ async def test_provider_callback_is_not_blocked_by_user_rate_limit(setup) -> Non
 
     assert provider.status_code == 204
     assert runtime.delivery.calls == [reward.id]
+
+
+@pytest.mark.asyncio
+async def test_unavailable_earned_claim_is_explicit_and_keeps_proof(setup) -> None:
+    from cinegate.services.delivery import DeliveryService
+
+    database, runtime, reward, client = setup
+    runtime.delivery = DeliveryService(database, object())
+    await runtime.rewards.mark_client_completed(session_id=reward.id, telegram_user_id=USER_ID)
+    earned = await runtime.rewards.mark_provider_confirmed(telegram_user_id=USER_ID)
+    async with database.session() as session, session.begin():
+        quality = await session.get(MovieQuality, reward.movie_quality_id)
+        quality.parser_confidence = 0
+
+    response = await client.post(
+        f"/api/rewards/{reward.id}/claim", json={"init_data": signed_init_data()},
+    )
+    assert response.status_code == 409
+    assert response.json()["status"] == "unavailable"
+    assert response.json()["reward_retained"] is True
+    assert "تم حفظ استحقاقك" in response.json()["detail"]
+    assert "اختيار أفلام أخرى" in response.json()["detail"]
+    assert "دون إعلان جديد" in response.json()["detail"]
+    retained = await runtime.rewards.get(reward.id)
+    assert retained.status == "unavailable"
+    assert retained.client_completed_at == earned.client_completed_at
+    assert retained.provider_confirmed_at == earned.provider_confirmed_at
+    provider = await client.get(f"/providers/adsgram/reward/{CALLBACK_SECRET}?userid={USER_ID}")
+    assert provider.status_code == 204
+    await set_setting(database, "adsgram_block_id", "12345")
+    page = await client.get(f"/miniapp/reward/{reward.id}")
+    assert page.status_code == 200
+    assert 'const rewardStatus = "unavailable";' in page.text
+    assert 'response.status === 409 && data.status === "unavailable"' in page.text
+    assert "button.onclick = continueExistingReward" in page.text

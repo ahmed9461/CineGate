@@ -110,6 +110,19 @@ def build_reward_router() -> APIRouter:
 
         if reward.is_rewarded:
             delivery = await runtime.delivery.deliver(reward.id)
+            if delivery.status == "unavailable":
+                return JSONResponse(
+                    {
+                        "status": "unavailable",
+                        "reward_retained": True,
+                        "detail": (
+                            "الجودة المطلوبة غير متاحة حاليًا. تم حفظ استحقاقك، "
+                            "ويمكنك اختيار أفلام أخرى. افتح هذا الطلب لاحقًا "
+                            "لاستكماله عند استعادة الجودة دون إعلان جديد."
+                        ),
+                    },
+                    status_code=status.HTTP_409_CONFLICT,
+                )
             response_status = (
                 status.HTTP_200_OK
                 if delivery.status == "delivered"
@@ -258,6 +271,11 @@ def _reward_page_html(
           const retryAfter = response.headers.get("Retry-After") || "لحظات";
           throw new Error("طلبات كثيرة، حاول مجددًا بعد " + retryAfter + " ثانية.");
         }}
+        if (response.status === 409 && data.status === "unavailable") {{
+          button.textContent = "استكمال الطلب المحفوظ";
+          button.onclick = continueExistingReward;
+          throw new Error(data.detail);
+        }}
         if (data.status === "delivered") {{
           statusBox.textContent = "✅ تم التحقق وإرسال الفيلم إلى البوت.";
           setTimeout(() => tg.close(), 1200);
@@ -286,9 +304,12 @@ def _reward_page_html(
       button.hidden = true;
       statusBox.textContent = "✅ تم إرسال الفيلم بالفعل.";
     }} else if (!needsAd) {{
+      if (rewardStatus === "unavailable") {{
+        button.onclick = continueExistingReward;
+      }}
       continueExistingReward();
     }} else {{
-      button.addEventListener("click", async () => {{
+      button.onclick = async () => {{
         button.disabled = true;
         statusBox.textContent = "جاري تحميل الإعلان...";
         try {{
@@ -299,7 +320,7 @@ def _reward_page_html(
           statusBox.textContent = error?.message || "تعذر إكمال الإعلان. حاول مرة أخرى.";
           button.disabled = false;
         }}
-      }});
+      }};
     }}
   </script>
 </body>
