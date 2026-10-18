@@ -16,6 +16,7 @@ from cinegate.domain.rewards import (
     RewardUserMismatch,
 )
 from cinegate.repositories.settings import SettingsRepository
+from cinegate.services.reward_availability import availability_reason, preserve_unavailable
 
 _ACTIVE_STATUSES = (
     "pending",
@@ -61,6 +62,7 @@ class RewardSessionService:
                 .where(
                     MovieQuality.movie_id == movie_id,
                     MovieQuality.quality == quality,
+                    MovieQuality.parser_confidence > 0,
                     Movie.status == "indexed",
                 )
             )
@@ -82,17 +84,50 @@ class RewardSessionService:
                 .where(
                     RewardSession.telegram_user_id == telegram_user_id,
                     RewardSession.status.in_(_ACTIVE_STATUSES),
+                    RewardSession.unavailable_at.is_(None),
                 )
                 .order_by(RewardSession.created_at.desc())
                 .limit(1)
                 .with_for_update()
             )
 
+            if active is not None and active.status == "rewarded":
+                reason = availability_reason(
+                    active,
+                    await session.get(Movie, active.movie_id),
+                    await session.get(MovieQuality, active.movie_quality_id),
+                )
+                if reason is not None:
+                    preserve_unavailable(active, reason=reason, now=now)
+                    # Release the partial unique-index slot before inserting another.
+                    await session.flush()
+                    active = None
+
+            # A retained credit may resume without occupying the provider's active
+            # ad slot, even while a newer ad request exists for this user.
+            retained = await session.scalar(
+                select(RewardSession)
+                .where(
+                    RewardSession.telegram_user_id == telegram_user_id,
+                    RewardSession.movie_id == movie_id,
+                    RewardSession.movie_quality_id == quality_row.id,
+                    RewardSession.quality == quality,
+                    RewardSession.status.in_(("unavailable", "delivering")),
+                    RewardSession.unavailable_at.is_not(None),
+                )
+                .order_by(RewardSession.created_at)
+                .limit(1)
+                .with_for_update()
+            )
+            if retained is not None:
+                return _view(retained), False
+
             if active is not None:
                 view = _view(active)
                 if (
                     active.movie_id == movie_id
                     and active.movie_quality_id == quality_row.id
+                    and active.quality == quality
                 ):
                     return view, False
                 raise ActiveRewardConflict(view)
@@ -241,6 +276,7 @@ class RewardSessionService:
                 .where(
                     RewardSession.telegram_user_id == telegram_user_id,
                     RewardSession.status.in_(_ACTIVE_STATUSES),
+                    RewardSession.unavailable_at.is_(None),
                 )
                 .order_by(RewardSession.created_at.desc())
                 .limit(1)
@@ -271,7 +307,7 @@ class RewardSessionService:
 
 
 def _refresh_reward_status(reward: RewardSession, now: datetime) -> None:
-    if reward.status in {"delivering", "delivered"}:
+    if reward.status in {"unavailable", "delivering", "delivered"}:
         return
     if (
         reward.client_completed_at is not None

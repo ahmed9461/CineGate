@@ -31,6 +31,7 @@ def telethon_message_to_archive(message: Any) -> ArchiveMessage:
         message_id=int(message.id),
         media_kind=media_kind,
         caption=raw_text or None,
+        edited_at=getattr(message, "edit_date", None),
     )
 
 

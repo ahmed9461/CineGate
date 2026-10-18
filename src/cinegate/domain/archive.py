@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime
 from enum import StrEnum
 
 
@@ -27,6 +28,7 @@ class ArchiveMessage:
     message_id: int
     media_kind: MediaKind
     caption: str | None = None
+    edited_at: datetime | None = None
 
     def __post_init__(self) -> None:
         if self.message_id <= 0:

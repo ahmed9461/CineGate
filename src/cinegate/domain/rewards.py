@@ -20,7 +20,7 @@ class RewardSessionView:
 
     @property
     def is_rewarded(self) -> bool:
-        return self.status in {"rewarded", "delivering", "delivered"}
+        return self.status in {"rewarded", "unavailable", "delivering", "delivered"}
 
 
 class RewardError(RuntimeError):

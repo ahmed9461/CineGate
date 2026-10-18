@@ -1,8 +1,8 @@
 # CineGate Project Status
 
-**Last updated:** 2026-09-21  
-**Overall status:** 🟢 Plan 0009 complete; controlled production launch remains
-**Code status:** Plans 0003–0009 are implemented and CI-verified.
+**Last updated:** 2026-10-15
+**Overall status:** Plan 0011 local reward/Archive fixes validated; not published or deployed
+**Code status:** Historical Plans 0003–0009 are CI-verified. Plan 0011 is locally verified against main `1a7def9`; remote CI has not run these unpublished changes.
 
 ## Completed
 
@@ -77,16 +77,11 @@ Implemented:
 
 ## Next exact step
 
-Deploy the verified `main` revision to the chosen production environment and execute `docs/LAUNCH_CHECKLIST.md`.
+Review the local Plan 0011 patch and repair notes. Publication, merge and deployment require separate owner authorization; none has occurred.
 
-This includes:
+Scoped reward/Archive fixes pass the complete local PostgreSQL suite (321 tests), lint, compilation, shell checks, migration roundtrip and fresh backup/restore smoke. Read `docs/PLAN0011_REPAIR_NOTES.md` before applying migrations, especially the retained-credit downgrade guard.
 
-1. provide the production Telegram/AdsGram secrets and non-secret runtime values
-2. configure the trusted HTTPS edge with raw secret-path logging disabled
-3. run migrations and a fresh non-production restore drill
-4. register/verify the webhook with `max_connections=1`
-5. perform the controlled Telegram/AdsGram smoke tests
-6. configure external monitoring/alert delivery
+Separate audit issues remain: delivery/recovery lock inversion, generic Mini App retry handling, readiness transport errors, ORM trigram-index drift, and preexisting 2160p/year parsing. Plan them independently. Real Telegram/AdsGram/HTTPS/production validation remains unperformed.
 
 ## Operational safety rules
 
@@ -109,14 +104,21 @@ This includes:
 
 ## Active plan
 
-`plans/0009-launch-hardening-and-deployment.md` — **Completed**
+`plans/0011-reward-and-archive-audit-fixes.md` — **Completed locally; unpublished**
 
 ## Blockers
 
-No code blocker remains for Plan 0009.
+No execution blocker remains for the scoped Plan 0011 local fixes. Separate audit findings above remain unresolved.
 
 Production launch execution requires the real host, credentials, authorized channels, public HTTPS endpoint, and AdsGram values.
 
 ## Resume instruction
 
 Read `AGENTS.md`, `PROJECT_MEMORY.md`, this file, `docs/SECURITY.md`, Plan 0009, and `docs/LAUNCH_CHECKLIST.md` before production launch work.
+
+
+## 2026-10-15 — Local independent audit checkpoint (not published)
+Audited commit 1a7def9: 285 tests passed with real PostgreSQL16 UTF8; lint/compile/shell/dependency checks, migration roundtrip and fresh backup/restore passed. Targeted review reproduced defects outside suite coverage: earned-reward lockout after unavailable content, Archive boundary/edit/stale replay integrity, full-reindex resolution collision, delivery/recovery lock inversion, Mini App retry state, readiness transport exception handling. Alembic check flags manually created trigram indexes absent from ORM metadata. See local Plan0010. No application fixes or upstream changes. Next: owner review and authorized repair plan; do not infer production readiness from green existing tests.
+
+## 2026-10-18 - Repair publication candidate
+Owner authorized publishing the scoped Plan0011 corrections through reviewed GitHub PR, without production deployment. Candidate also contains explicit Bash execution, Git executable-mode checks on Windows, LF checkout attributes, and two real644-passfile rejection regressions. No permission checks are skipped or relaxed. Native Windows complete suite:320 passed/3 failed/0 skipped of323; Git Bash permission emulation prevents restrictive output-mode and passfile-rejection guarantees. Require exact-commit Linux CI validation including all323 tests and Node execution before merge; use current PR/checks as result source. Alembic's two known trigram-index metadata differences and the other separate audit limitations remain unchanged. No machine-specific paths, secrets or runtime artifacts are included. See plans/0014-repair-publication.md.

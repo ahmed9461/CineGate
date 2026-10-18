@@ -8,7 +8,7 @@ from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
-from cinegate.db import models  # noqa: F401
+from cinegate.db import archive_models, models  # noqa: F401
 from cinegate.db.base import Base
 
 config = context.config

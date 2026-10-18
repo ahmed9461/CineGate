@@ -280,3 +280,28 @@ def test_year_named_movie_uses_separate_release_year() -> None:
     assert group.year == 2019
     assert group.qualities[0].normalized_title == "1917"
     assert group.qualities[0].year == 2019
+
+
+def test_lazy_group_stops_at_noise_boundary_without_consuming_channel_tail():
+    def messages():
+        yield ArchiveMessage(100, MediaKind.PHOTO,
+                             "الفيلم: Interstellar\nالسنة: 2014\nالقصة: قصة")
+        yield ArchiveMessage(101, MediaKind.OTHER)
+        yield ArchiveMessage(102, MediaKind.OTHER)
+        raise AssertionError("closed group's unrelated tail must not be consumed")
+
+    group = next(ArchiveParser().iter_groups(messages(), diagnostic_limit=4))
+    assert group.poster_message_id == 100
+    assert group.status is GroupStatus.ORPHAN
+
+
+def test_lazy_group_diagnostics_are_bounded_without_changing_quality_selection():
+    messages = [ArchiveMessage(100, MediaKind.PHOTO,
+                               "الفيلم: Interstellar\nالسنة: 2014\nالقصة: قصة")]
+    messages.extend(ArchiveMessage(mid, MediaKind.VIDEO, "Interstellar 2014 #720p")
+                    for mid in range(101, 151))
+    full = ArchiveParser().parse(messages)[0]
+    bounded = next(ArchiveParser().iter_groups(messages, diagnostic_limit=4))
+    assert bounded.qualities == full.qualities
+    assert len(bounded.diagnostics) == 4
+    assert bounded.diagnostics == full.diagnostics[-4:]

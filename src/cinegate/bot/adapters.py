@@ -20,5 +20,6 @@ def telegram_message_to_archive(message: Message) -> ArchiveMessage:
     return ArchiveMessage(
         message_id=message.message_id,
         media_kind=media_kind,
-        caption=message.caption,
+        caption=message.caption or message.text,
+        edited_at=message.edit_date,
     )

@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable
+from collections import deque
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
 from difflib import SequenceMatcher
 
@@ -63,7 +64,7 @@ class _QualityCandidate:
 class _GroupBuilder:
     poster: _PosterCandidate
     qualities: dict[str, ParsedQuality] = field(default_factory=dict)
-    diagnostics: list[str] = field(default_factory=list)
+    diagnostics: deque[str] = field(default_factory=deque)
     ambiguous_candidates: int = 0
     messages_since_poster: int = 0
     noise_messages: int = 0
@@ -82,7 +83,18 @@ class ArchiveParser:
         self._max_noise_messages = max_noise_messages
 
     def parse(self, messages: Iterable[ArchiveMessage]) -> tuple[ParsedMovieGroup, ...]:
-        groups: list[ParsedMovieGroup] = []
+        return tuple(self.iter_groups(messages))
+
+    def iter_groups(
+        self, messages: Iterable[ArchiveMessage], *, diagnostic_limit: int | None = None
+    ) -> Iterator[ParsedMovieGroup]:
+        """Yield closed groups lazily, optionally retaining only diagnostic tail.
+
+        Indexing one known group can stop as soon as its boundary closes rather
+        than reading the rest of a channel's noisy tail. Full parse is unchanged.
+        """
+        if diagnostic_limit is not None and diagnostic_limit < 1:
+            raise ValueError("diagnostic_limit must be positive")
         current: _GroupBuilder | None = None
         previous_message_id = 0
 
@@ -93,8 +105,8 @@ class ArchiveParser:
             poster = _detect_poster(message)
             if poster is not None:
                 if current is not None:
-                    groups.append(_finalize_group(current))
-                current = _GroupBuilder(poster=poster)
+                    yield _finalize_group(current)
+                current = _GroupBuilder(poster=poster, diagnostics=deque(maxlen=diagnostic_limit))
                 continue
 
             quality = _detect_quality(message)
@@ -149,13 +161,11 @@ class ArchiveParser:
             current.messages_since_poster += 1
             current.noise_messages += 1
             if current.noise_messages > self._max_noise_messages:
-                groups.append(_finalize_group(current))
+                yield _finalize_group(current)
                 current = None
 
         if current is not None:
-            groups.append(_finalize_group(current))
-
-        return tuple(groups)
+            yield _finalize_group(current)
 
 
 def _detect_poster(message: ArchiveMessage) -> _PosterCandidate | None:

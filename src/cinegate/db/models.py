@@ -21,6 +21,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from cinegate.db.archive_models import ArchiveMessageSnapshot  # noqa: F401
 from cinegate.db.base import Base
 
 
@@ -156,7 +157,7 @@ class RewardSession(Base):
         CheckConstraint(
             "status IN ("
             "'pending', 'client_completed', 'provider_confirmed', "
-            "'rewarded', 'delivering', 'delivered', 'expired'"
+            "'rewarded', 'delivering', 'delivered', 'expired', 'unavailable'"
             ")",
             name="ck_reward_sessions_status",
         ),
@@ -168,7 +169,7 @@ class RewardSession(Base):
                 "status IN ("
                 "'pending', 'client_completed', 'provider_confirmed', "
                 "'rewarded', 'delivering'"
-                ")"
+                ") AND unavailable_at IS NULL"
             ),
         ),
         Index("ix_reward_sessions_user_created", "telegram_user_id", "created_at"),
@@ -205,6 +206,8 @@ class RewardSession(Base):
         DateTime(timezone=True)
     )
     rewarded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    unavailable_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    unavailable_reason: Mapped[str | None] = mapped_column(String(64))
     delivery_started_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True)
     )

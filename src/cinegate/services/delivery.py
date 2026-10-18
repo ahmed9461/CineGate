@@ -5,7 +5,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from aiogram import Bot
-from aiogram.exceptions import TelegramAPIError
+from aiogram.exceptions import TelegramAPIError, TelegramBadRequest
 from aiogram.types import MessageEntity
 from sqlalchemy import func, select, update
 
@@ -13,6 +13,7 @@ from cinegate.db.models import Delivery, Movie, MovieQuality, RewardSession
 from cinegate.db.session import Database
 from cinegate.domain.delivery import DeliveryResult, DueDeletion, RewardNotReady
 from cinegate.repositories.settings import SettingsRepository
+from cinegate.services.reward_availability import availability_reason, preserve_unavailable
 from cinegate.services.templates import TemplateService
 
 _DEFAULT_DELETE_SECONDS = 120
@@ -63,12 +64,19 @@ class DeliveryService:
                 protect_content=False,
             )
         except TelegramAPIError as exc:
+            # Only a definitive missing source identifies unavailable content.
+            # Permission, rate-limit, network and other API failures remain retryable.
+            missing_source = (
+                isinstance(exc, TelegramBadRequest)
+                and "message to copy not found" in exc.message.lower()
+            )
             await self._reset_failed_send(
                 reward_session_id=reward_session_id,
                 delivery_id=prepared.delivery_id,
                 error=str(exc),
+                unavailable_reason="archive_source_missing" if missing_source else None,
             )
-            return DeliveryResult(status="retryable")
+            return DeliveryResult(status="unavailable" if missing_source else "retryable")
 
         return await self._finalize_sent(
             reward_session_id=reward_session_id,
@@ -108,25 +116,16 @@ class DeliveryService:
                 )
             if reward.status == "delivering":
                 return DeliveryResult(status="processing")
-            if reward.status != "rewarded":
+            if reward.status not in {"rewarded", "unavailable"}:
                 raise RewardNotReady("reward is not ready for delivery")
 
             quality = await session.get(MovieQuality, reward.movie_quality_id)
             movie = await session.get(Movie, reward.movie_id)
-            if quality is None or movie is None:
-                raise RewardNotReady("rewarded movie quality no longer exists")
-            if movie.status != "indexed":
-                raise RewardNotReady(
-                    "rewarded movie is not currently safe for delivery"
-                )
-            if quality.parser_confidence <= 0:
-                raise RewardNotReady(
-                    "rewarded quality is not currently safe for delivery"
-                )
-            if reward.quality != quality.quality:
-                raise RewardNotReady(
-                    "rewarded quality binding no longer matches Archive metadata"
-                )
+            reason = availability_reason(reward, movie, quality)
+            if reason is not None:
+                preserve_unavailable(reward, reason=reason, now=now)
+                return DeliveryResult(status="unavailable")
+            assert quality is not None and movie is not None
 
             settings = await SettingsRepository(session).get_many(
                 ("movie_delete_seconds",)
@@ -190,6 +189,7 @@ class DeliveryService:
         reward_session_id: UUID,
         delivery_id: int,
         error: str,
+        unavailable_reason: str | None = None,
     ) -> None:
         async with self._database.session() as session, session.begin():
             reward = await session.scalar(
@@ -206,8 +206,13 @@ class DeliveryService:
                 return
 
             if reward.status == "delivering":
-                reward.status = "rewarded"
-                reward.delivery_started_at = None
+                if unavailable_reason is not None:
+                    preserve_unavailable(reward, reason=unavailable_reason, now=_utcnow())
+                else:
+                    reward.status = (
+                        "unavailable" if reward.unavailable_at is not None else "rewarded"
+                    )
+                    reward.delivery_started_at = None
             if delivery.status == "sending":
                 delivery.status = "pending"
                 delivery.send_started_at = None
@@ -294,7 +299,9 @@ class DeliveryService:
                 delivery.attempts += 1
                 delivery.last_error = "recovered stale sending state"
                 if reward is not None and reward.status == "delivering":
-                    reward.status = "rewarded"
+                    reward.status = (
+                        "unavailable" if reward.unavailable_at is not None else "rewarded"
+                    )
                     reward.delivery_started_at = None
                 recovered += 1
             return recovered
